@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Debugger</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #map-container {
+            flex: 1;
+            border-bottom: 2px solid #ccc;
+        }
+        #street-view-container {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="map-container"></div>
+        <div id="street-view-container"></div>
+    </div>
+
+    <script>
+        function initMap() {
+            console.log("initMap function called");
+
+            const mapElement = document.getElementById('map-container');
+            if (!mapElement) {
+                console.error("Map container not found!");
+                return;
+            }
+            
+            console.log("Map container found, creating map...");
+            const map = new google.maps.Map(mapElement, {
+                center: { lat: 37.5665, lng: 126.9780 },
+                zoom: 12,
+                mapTypeId: 'roadmap'
+            });
+            
+            console.log("Map created successfully");
+            
+            // Create a basic street view
+            const streetViewElement = document.getElementById('street-view-container');
+            if (!streetViewElement) {
+                console.error("Street view container not found!");
+                return;
+            }
+            
+            console.log("Street view container found, creating street view...");
+            const panorama = new google.maps.StreetViewPanorama(streetViewElement, {
+                position: { lat: 37.5665, lng: 126.9780 },
+                pov: {
+                    heading: 0,
+                    pitch: 0
+                }
+            });
+            
+            console.log("Street view created successfully");
+            map.setStreetView(panorama);
+        }
+    </script>
+    
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0&callback=initMap"></script>
+</body>
+</html>

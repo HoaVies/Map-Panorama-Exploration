@@ -14,14 +14,12 @@ export class GoogleMapsProvider {
         this.map = new google.maps.Map(document.getElementById(containerId), mapOptions);
     }
     initializeStreetView(containerId, options) {
-        // Cast to any to avoid TypeScript errors with extended options
         const streetViewOptions = {
             position: new google.maps.LatLng(options.position.lat, options.position.lng),
             pov: {
                 heading: options.pov.heading,
                 pitch: options.pov.pitch
             },
-            // Explicitly enable all navigation controls
             addressControl: true,
             enableCloseButton: true,
             linksControl: true,
@@ -78,7 +76,6 @@ export class GoogleMapsProvider {
         }
     }
     showCoverage(position) {
-        // Basic implementation
         this.hideCoverage();
     }
     hideCoverage() {

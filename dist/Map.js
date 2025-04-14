@@ -32,17 +32,14 @@ export class Map {
             if (this.isCoverageVisible) {
                 this.showCoverage(position);
             }
-            // Update location info
             this.updateLocationInfo(position);
         });
-        // Street view change handler
         this.provider.onStreetViewChange((position, heading, pitch) => {
             this.currentPosition = position;
             // Update map center and pegman
             this.provider.setCenter(position);
             this.provider.setPegmanPosition(position);
             this.provider.setPegmanVisible(true);
-            // Update POV
             this.provider.setStreetViewPOV(heading, pitch);
             // If coverage is being shown, update it
             if (this.isCoverageVisible) {
@@ -73,13 +70,8 @@ export class Map {
     updateLocationInfo(position) {
         const infoElement = document.getElementById('location-info');
         if (infoElement) {
-            // If you want to display actual address information, you would need
-            // to use the Google Maps Geocoding API here
             infoElement.innerHTML = `Lat: ${position.lat.toFixed(6)}, Lng: ${position.lng.toFixed(6)}`;
             infoElement.style.display = 'block';
-            // Position the info window near the current position on the map
-            // This would require converting lat/lng to pixel coordinates
-            // which would need additional code
             // For simplicity, we'll just position it at the top-right of the map
             const mapElement = document.getElementById(this.mapContainerId);
             if (mapElement) {
@@ -87,7 +79,6 @@ export class Map {
                 infoElement.style.top = `${rect.top + 10}px`;
                 infoElement.style.left = `${rect.right - infoElement.offsetWidth - 10}px`;
             }
-            // Hide after 3 seconds
             setTimeout(() => {
                 infoElement.style.display = 'none';
             }, 3000);

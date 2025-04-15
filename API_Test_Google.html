@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps API Test</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+        #map-test, #streetview-test {
+            height: 100%;
+            width: 50%;
+        }
+        #info-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-test"></div>
+    <div id="streetview-test"></div>
+    <div id="info-panel">Coordinates: <span id="coordinates"></span></div>
+
+    <script>
+        function initMap() {
+            const mapOptions = {
+                center: { lat: 40.7128, lng: -74.0060 },
+                zoom: 12,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+            const map = new google.maps.Map(document.getElementById('map-test'), mapOptions);
+            
+            const streetViewOptions = {
+                position: { lat: 40.7128, lng: -74.0060 },
+                pov: {
+                    heading: 0,
+                    pitch: 0
+                }
+            };
+            const streetView = new google.maps.StreetViewPanorama(
+                document.getElementById('streetview-test'),
+                streetViewOptions
+            );
+            
+            map.setStreetView(streetView);
+            
+            map.addListener('click', (event) => {
+                const position = event.latLng;
+                document.getElementById('coordinates').textContent = 
+                    `${position.lat().toFixed(6)}, ${position.lng().toFixed(6)}`;
+                
+                streetView.setPosition(position);
+            });
+            
+            streetView.addListener('position_changed', () => {
+                const position = streetView.getPosition();
+                if (position) {
+                    document.getElementById('coordinates').textContent = 
+                        `${position.lat().toFixed(6)}, ${position.lng().toFixed(6)}`;
+                }
+            });
+        }
+    </script>
+    <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0&callback=initMap">
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+    "name": "map-viewer",
+    "version": "1.0.0",
+    "description": "Vendor-neutral map viewer with street view support",
+    "main": "dist/index.js",
+    "type": "module",
+    "scripts": {
+      "build": "tsc",
+      "start": "tsc -w",
+      "serve": "http-server -o"
+    },
+    "dependencies": {
+      "@types/google.maps": "^3.54.0"
+    },
+    "devDependencies": {
+      "typescript": "^5.0.0",
+      "http-server": "^14.1.1"
+    }
+  }

@@ -26,7 +26,6 @@ export class KakaoMapsProvider {
         if (this.map) {
             this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         }
-        // Set map type
         this.setMapType(options.mapTypeId);
         // Initialize click handler
         if (this.map) {
@@ -121,9 +120,8 @@ export class KakaoMapsProvider {
         this.roadviewClient.getNearestPanoId(position, 50, (panoId) => {
             if (panoId === null) {
                 console.warn('No roadview available at this location');
-                // No panorama available - hide roadview container
-                this.roadviewContainer.style.display = 'none';
-                this.mapContainer.style.width = '100%';
+                this.roadviewContainer.style.display = 'block';
+                this.mapContainer.style.width = '50%';
                 if (this.map) {
                     this.map.relayout();
                 }
@@ -166,9 +164,7 @@ export class KakaoMapsProvider {
                     kakaoMapTypeId = kakao.maps.MapTypeId.HYBRID;
                     break;
                 case 'terrain':
-                    // Kakao doesn't have a direct terrain equivalent, so we'll use the roadmap
                     kakaoMapTypeId = kakao.maps.MapTypeId.ROADMAP;
-                    // Add terrain overlay if available
                     this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
                     break;
                 case 'roadmap':

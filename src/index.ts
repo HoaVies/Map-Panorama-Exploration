@@ -1,6 +1,7 @@
 import { Map } from './Map.js';
 import { GoogleMapsProvider } from './GoogleMapsProvider.js';
 import { KakaoMapsProvider } from './KakaoMapsProvider.js';
+import { YandexMapsProvider } from './YandexMapsProvider.js';
 import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvider.js';
 
 // Common map options
@@ -23,7 +24,7 @@ let currentProvider: IMapProvider;
 let map: Map;
 
 // Function to initialize a map provider
-function initializeMap(providerType: 'google' | 'kakao') {
+function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
     console.log(`Initializing ${providerType} Maps provider`);
     
     // Clear existing map containers
@@ -42,6 +43,8 @@ function initializeMap(providerType: 'google' | 'kakao') {
         // Create the selected map provider
         if (providerType === 'google') {
             currentProvider = new GoogleMapsProvider();
+        } else if (providerType === 'yandex'){
+            currentProvider = new YandexMapsProvider();
         } else {
             currentProvider = new KakaoMapsProvider();
         }
@@ -71,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (providerSelector) {
         providerSelector.addEventListener('change', () => {
-            const selectedProvider = providerSelector.value as 'google' | 'kakao';
+            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex';
             console.log(`Provider changed to: ${selectedProvider}`);
             initializeMap(selectedProvider);
         });

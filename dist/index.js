@@ -1,6 +1,7 @@
 import { Map } from './Map.js';
 import { GoogleMapsProvider } from './GoogleMapsProvider.js';
 import { KakaoMapsProvider } from './KakaoMapsProvider.js';
+import { YandexMapsProvider } from './YandexMapsProvider.js';
 // Common map options
 const mapOptions = {
     center: { lat: 37.5665, lng: 126.9780 }, // Seoul
@@ -33,6 +34,9 @@ function initializeMap(providerType) {
         // Create the selected map provider
         if (providerType === 'google') {
             currentProvider = new GoogleMapsProvider();
+        }
+        else if (providerType === 'yandex') {
+            currentProvider = new YandexMapsProvider();
         }
         else {
             currentProvider = new KakaoMapsProvider();

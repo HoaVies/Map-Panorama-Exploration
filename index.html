@@ -19,6 +19,7 @@
         #map-container {
             flex: 1;
             border-bottom: 2px solid #ccc;
+            position: relative;
         }
         #street-view-container {
             flex: 1;
@@ -47,37 +48,6 @@
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             z-index: 1000;
         }
-        /* Style for roadview control button */
-        #roadviewControl {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            width: 42px;
-            height: 42px;
-            z-index: 1;
-            cursor: pointer;
-            background: url('https://t1.daumcdn.net/localimg/localimages/07/2018/pc/common/img_search.png') repeat no-repeat;
-        }
-        #roadviewControl.active {
-            background-position: 0 -350px;
-        }
-        /* Style for roadview close button */
-        #close {
-            position: absolute;
-            padding: 4px;
-            top: 5px;
-            left: 5px;
-            cursor: pointer;
-            background: white;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        #close .img {
-            display: block;
-            background: url('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/overlay_close.png');
-            width: 16px;
-            height: 16px;
-        }
     </style>
 </head>
 <body>
@@ -93,14 +63,6 @@
     <div class="container">
         <div id="map-container"></div>
         <div id="street-view-container"></div>
-    </div>
-    <div class="container">
-        <div id="mapWrapper" style="width:50%;height:100%;float:left">
-            <div id="map-container" style="width:100%;height:100%"></div>
-        </div>
-        <div id="rvWrapper" style="width:50%;height:100%;float:left">
-            <div id="street-view-container" style="width:100%;height:100%"></div>
-        </div>
     </div>
     
     <div id="location-info"></div>

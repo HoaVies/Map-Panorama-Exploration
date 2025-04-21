@@ -6,13 +6,13 @@ export class KakaoMapsProvider {
         this.pegmanMarker = null;
         this.mapClickCallback = null;
         this.roadviewChangeCallback = null;
-        this.mapContainer = null;
-        this.roadviewContainer = null;
-        this.overlayOn = true;
+        this.roadviewControl = null;
+        this.overlayOn = false;
+        this.isProcessingEvent = false;
     }
     initializeMap(containerId, options) {
-        this.mapContainer = document.getElementById(containerId);
-        if (!this.mapContainer) {
+        const mapContainer = document.getElementById(containerId);
+        if (!mapContainer) {
             console.error('Map container not found');
             return;
         }
@@ -20,40 +20,83 @@ export class KakaoMapsProvider {
             center: new kakao.maps.LatLng(options.center.lat, options.center.lng),
             level: this.convertZoomToLevel(options.zoom)
         };
-        this.map = new kakao.maps.Map(this.mapContainer, mapOptions);
+        this.map = new kakao.maps.Map(mapContainer, mapOptions);
         this.roadviewClient = new kakao.maps.RoadviewClient();
-        // Add the roadview overlay to the map
-        if (this.map) {
-            this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-        }
+        // Set map type
         this.setMapType(options.mapTypeId);
+        // Create and add the roadview control button
+        this.createRoadviewControl(mapContainer);
         // Initialize click handler
-        if (this.map) {
-            kakao.maps.event.addListener(this.map, 'click', (mouseEvent) => {
-                const latlng = mouseEvent.latLng;
-                if (this.mapClickCallback && latlng) {
-                    this.mapClickCallback({
-                        lat: latlng.getLat(),
-                        lng: latlng.getLng()
-                    });
-                    // If we have a pegman marker, update its position
-                    if (this.pegmanMarker) {
-                        this.pegmanMarker.setPosition(latlng);
-                    }
-                    // Update roadview
-                    this.toggleRoadview(latlng);
-                }
-            });
+        this.setupMapClickHandler();
+    }
+    createRoadviewControl(mapContainer) {
+        // Create the roadview control button
+        this.roadviewControl = document.createElement('div');
+        this.roadviewControl.id = 'roadviewControl';
+        this.roadviewControl.style.position = 'absolute';
+        this.roadviewControl.style.top = '10px';
+        this.roadviewControl.style.left = '10px';
+        this.roadviewControl.style.width = '42px';
+        this.roadviewControl.style.height = '42px';
+        this.roadviewControl.style.zIndex = '2';
+        this.roadviewControl.style.cursor = 'pointer';
+        this.roadviewControl.style.background = 'url(https://t1.daumcdn.net/localimg/localimages/07/2018/pc/common/img_search.png) 0 -450px no-repeat';
+        this.roadviewControl.style.backgroundColor = 'white';
+        this.roadviewControl.style.borderRadius = '4px';
+        this.roadviewControl.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.3)';
+        this.roadviewControl.addEventListener('click', () => this.toggleRoadviewOverlay());
+        mapContainer.appendChild(this.roadviewControl);
+    }
+    toggleRoadviewOverlay() {
+        if (!this.roadviewControl || !this.map)
+            return;
+        // Toggle button active state
+        if (this.roadviewControl.className.indexOf('active') === -1) {
+            this.roadviewControl.className = 'active';
+            this.roadviewControl.style.backgroundPosition = '0 -350px';
+            this.showCoverage();
+        }
+        else {
+            this.roadviewControl.className = '';
+            this.roadviewControl.style.backgroundPosition = '0 -450px';
+            this.hideCoverage();
+        }
+    }
+    showCoverage(position) {
+        if (!this.map)
+            return;
+        this.overlayOn = true;
+        // Add roadview overlay to map
+        this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+        // Show pegman marker on map
+        if (this.pegmanMarker) {
+            this.pegmanMarker.setMap(this.map);
+            // Position pegman at map center or provided position
+            const targetPosition = position ?
+                new kakao.maps.LatLng(position.lat, position.lng) :
+                this.map.getCenter();
+            this.pegmanMarker.setPosition(targetPosition);
+        }
+    }
+    hideCoverage() {
+        if (!this.map)
+            return;
+        this.overlayOn = false;
+        // Remove roadview overlay
+        this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+        // Hide pegman marker
+        if (this.pegmanMarker) {
+            this.pegmanMarker.setMap(null);
         }
     }
     initializeStreetView(containerId, options) {
-        this.roadviewContainer = document.getElementById(containerId);
-        if (!this.roadviewContainer || !this.map) {
-            console.error('Street view container or map not found');
+        const roadviewContainer = document.getElementById(containerId);
+        if (!roadviewContainer) {
+            console.error('Street view container not found');
             return;
         }
         // Create roadview object
-        this.roadview = new kakao.maps.Roadview(this.roadviewContainer);
+        this.roadview = new kakao.maps.Roadview(roadviewContainer);
         // Create marker image for pegman
         const markImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/2018/pc/roadview_minimap_wk_2018.png', new kakao.maps.Size(26, 46), {
             spriteSize: new kakao.maps.Size(1666, 168),
@@ -64,18 +107,59 @@ export class KakaoMapsProvider {
         this.pegmanMarker = new kakao.maps.Marker({
             image: markImage,
             position: new kakao.maps.LatLng(options.position.lat, options.position.lng),
-            draggable: true,
-            map: this.map
+            draggable: true
         });
-        // Set initial position in roadview
-        const kakaoPosition = new kakao.maps.LatLng(options.position.lat, options.position.lng);
-        this.toggleRoadview(kakaoPosition);
+        // Set initial roadview position
+        this.setRoadviewPosition(options.position);
         // Add position_changed event listener to roadview
-        if (this.roadview) {
-            kakao.maps.event.addListener(this.roadview, 'position_changed', () => {
+        this.setupRoadviewEvents();
+        // Add dragend event to pegman marker
+        this.setupPegmanEvents();
+    }
+    setupMapClickHandler() {
+        if (!this.map)
+            return;
+        kakao.maps.event.addListener(this.map, 'click', (mouseEvent) => {
+            if (this.isProcessingEvent)
+                return;
+            this.isProcessingEvent = true;
+            try {
+                // Only handle clicks when roadview overlay is active
+                if (!this.overlayOn) {
+                    return;
+                }
+                const latlng = mouseEvent.latLng;
+                if (this.mapClickCallback && latlng) {
+                    this.mapClickCallback({
+                        lat: latlng.getLat(),
+                        lng: latlng.getLng()
+                    });
+                }
+                // If pegman marker exists, update its position
+                if (this.pegmanMarker) {
+                    this.pegmanMarker.setPosition(latlng);
+                }
+                // Try to set street view at clicked position
+                this.setRoadviewPosition({
+                    lat: latlng.getLat(),
+                    lng: latlng.getLng()
+                });
+            }
+            finally {
+                this.isProcessingEvent = false;
+            }
+        });
+    }
+    setupRoadviewEvents() {
+        if (!this.roadview)
+            return;
+        kakao.maps.event.addListener(this.roadview, 'position_changed', () => {
+            if (this.isProcessingEvent)
+                return;
+            this.isProcessingEvent = true;
+            try {
                 if (!this.roadview)
                     return;
-                // Get current roadview position
                 const rvPosition = this.roadview.getPosition();
                 if (!rvPosition)
                     return;
@@ -83,8 +167,8 @@ export class KakaoMapsProvider {
                 if (this.map) {
                     this.map.setCenter(rvPosition);
                 }
-                // Update pegman marker if visible
-                if (this.pegmanMarker) {
+                // Update pegman marker if overlay is active
+                if (this.pegmanMarker && this.overlayOn) {
                     this.pegmanMarker.setPosition(rvPosition);
                 }
                 // Call the callback if it exists
@@ -92,8 +176,16 @@ export class KakaoMapsProvider {
                     const viewpoint = this.roadview.getViewpoint();
                     this.roadviewChangeCallback({ lat: rvPosition.getLat(), lng: rvPosition.getLng() }, viewpoint.pan, viewpoint.tilt);
                 }
-            });
-            kakao.maps.event.addListener(this.roadview, 'viewpoint_changed', () => {
+            }
+            finally {
+                this.isProcessingEvent = false;
+            }
+        });
+        kakao.maps.event.addListener(this.roadview, 'viewpoint_changed', () => {
+            if (this.isProcessingEvent)
+                return;
+            this.isProcessingEvent = true;
+            try {
                 if (!this.roadview || !this.roadviewChangeCallback)
                     return;
                 const position = this.roadview.getPosition();
@@ -101,44 +193,43 @@ export class KakaoMapsProvider {
                 if (position && viewpoint) {
                     this.roadviewChangeCallback({ lat: position.getLat(), lng: position.getLng() }, viewpoint.pan, viewpoint.tilt);
                 }
-            });
-        }
-        // Add dragend event to pegman marker
-        if (this.pegmanMarker) {
-            kakao.maps.event.addListener(this.pegmanMarker, 'dragend', () => {
+            }
+            finally {
+                this.isProcessingEvent = false;
+            }
+        });
+    }
+    setupPegmanEvents() {
+        if (!this.pegmanMarker)
+            return;
+        kakao.maps.event.addListener(this.pegmanMarker, 'dragend', () => {
+            if (this.isProcessingEvent)
+                return;
+            this.isProcessingEvent = true;
+            try {
                 if (!this.pegmanMarker)
                     return;
                 const position = this.pegmanMarker.getPosition();
-                this.toggleRoadview(position);
-            });
-        }
-    }
-    // Function to toggle roadview based on position - following the Kakao example
-    toggleRoadview(position) {
-        if (!this.roadviewClient || !this.roadview || !this.mapContainer || !this.roadviewContainer)
-            return;
-        this.roadviewClient.getNearestPanoId(position, 50, (panoId) => {
-            if (panoId === null) {
-                console.warn('No roadview available at this location');
-                this.roadviewContainer.style.display = 'block';
-                this.mapContainer.style.width = '50%';
-                if (this.map) {
-                    this.map.relayout();
-                }
+                this.setRoadviewPosition({
+                    lat: position.getLat(),
+                    lng: position.getLng()
+                });
             }
-            else {
-                // Panorama available - show split view
-                this.roadviewContainer.style.display = 'block';
-                this.mapContainer.style.width = '50%';
-                // Set the roadview to the pano ID
-                if (this.roadview) {
-                    this.roadview.setPanoId(panoId, position);
-                }
-                if (this.map) {
-                    this.map.relayout();
-                }
-                if (this.roadview) {
-                    this.roadview.relayout();
+            finally {
+                this.isProcessingEvent = false;
+            }
+        });
+    }
+    setRoadviewPosition(position) {
+        if (!this.roadviewClient || !this.roadview)
+            return;
+        const kakaoPosition = new kakao.maps.LatLng(position.lat, position.lng);
+        this.roadviewClient.getNearestPanoId(kakaoPosition, 50, (panoId) => {
+            if (panoId && this.roadview) {
+                this.roadview.setPanoId(panoId, kakaoPosition);
+                // Update pegman position if it exists and overlay is active
+                if (this.pegmanMarker && this.overlayOn) {
+                    this.pegmanMarker.setPosition(kakaoPosition);
                 }
             }
         });
@@ -176,10 +267,11 @@ export class KakaoMapsProvider {
         }
     }
     setStreetViewPosition(position) {
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setPosition(new kakao.maps.LatLng(position.lat, position.lng));
+        const kakaoPosition = new kakao.maps.LatLng(position.lat, position.lng);
+        if (this.pegmanMarker && this.overlayOn) {
+            this.pegmanMarker.setPosition(kakaoPosition);
         }
-        this.toggleRoadview(new kakao.maps.LatLng(position.lat, position.lng));
+        this.setRoadviewPosition(position);
     }
     setStreetViewPOV(heading, pitch) {
         if (this.roadview) {
@@ -191,30 +283,18 @@ export class KakaoMapsProvider {
         }
     }
     setPegmanPosition(position) {
-        if (this.pegmanMarker) {
+        if (this.pegmanMarker && this.overlayOn) {
             this.pegmanMarker.setPosition(new kakao.maps.LatLng(position.lat, position.lng));
         }
     }
     setPegmanVisible(visible) {
-        if (this.pegmanMarker && this.map) {
+        if (this.pegmanMarker && this.map && this.overlayOn) {
             if (visible) {
                 this.pegmanMarker.setMap(this.map);
             }
             else {
                 this.pegmanMarker.setMap(null);
             }
-        }
-    }
-    showCoverage(position) {
-        if (this.map) {
-            this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-            this.overlayOn = true;
-        }
-    }
-    hideCoverage() {
-        if (this.map) {
-            this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-            this.overlayOn = false;
         }
     }
     onMapClick(callback) {
@@ -224,10 +304,7 @@ export class KakaoMapsProvider {
         this.roadviewChangeCallback = callback;
     }
     // Helper method to convert Google's zoom level to Kakao's level
-    // Google zoom: 0 (furthest) to 21 (closest)
-    // Kakao level: 14 (furthest) to 1 (closest)
     convertZoomToLevel(zoom) {
-        // Invert the scale and adjust the range
         return Math.max(1, Math.min(14, Math.floor(14 - (zoom / 21) * 13)));
     }
 }

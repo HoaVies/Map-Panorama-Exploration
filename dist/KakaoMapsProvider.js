@@ -9,6 +9,7 @@ export class KakaoMapsProvider {
         this.roadviewControl = null;
         this.overlayOn = false;
         this.isProcessingEvent = false;
+        this.mapTypeControl = null;
     }
     initializeMap(containerId, options) {
         const mapContainer = document.getElementById(containerId);
@@ -26,6 +27,9 @@ export class KakaoMapsProvider {
         this.setMapType(options.mapTypeId);
         // Create and add the roadview control button
         this.createRoadviewControl(mapContainer);
+        // Add map type control to the top left corner
+        this.mapTypeControl = new kakao.maps.MapTypeControl();
+        this.map.addControl(this.mapTypeControl, kakao.maps.ControlPosition.TOPLEFT);
         // Initialize click handler
         this.setupMapClickHandler();
     }
@@ -247,6 +251,8 @@ export class KakaoMapsProvider {
     setMapType(mapTypeId) {
         if (this.map) {
             let kakaoMapTypeId;
+            // Remove any overlay map types first to avoid stacking them
+            this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
             switch (mapTypeId.toLowerCase()) {
                 case 'satellite':
                     kakaoMapTypeId = kakao.maps.MapTypeId.SKYVIEW;

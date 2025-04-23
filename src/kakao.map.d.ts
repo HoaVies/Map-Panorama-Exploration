@@ -181,5 +181,24 @@ declare namespace kakao.maps {
         preventMap(): void;
     };
 
+    // Add MapTypeControl and ZoomControl interfaces
     type MapTypeId = any;
+    interface Map {
+        addControl(control: MapTypeControl | ZoomControl, position: any): void;
+    }
+
+    class MapTypeControl {
+        constructor();
+    }
+
+    const ControlPosition: {
+        TOPLEFT: any;
+        TOP: any;
+        TOPRIGHT: any;
+        LEFT: any;
+        RIGHT: any;
+        BOTTOMLEFT: any;
+        BOTTOM: any;
+        BOTTOMRIGHT: any;
+    };
 }

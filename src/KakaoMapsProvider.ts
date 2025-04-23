@@ -10,6 +10,7 @@ export class KakaoMapsProvider implements IMapProvider {
     private roadviewControl: HTMLElement | null = null;
     private overlayOn: boolean = false;
     private isProcessingEvent: boolean = false;
+    private mapTypeControl: any = null;
 
     public initializeMap(containerId: string, options: MapOptions): void {
         const mapContainer = document.getElementById(containerId);
@@ -31,6 +32,10 @@ export class KakaoMapsProvider implements IMapProvider {
         
         // Create and add the roadview control button
         this.createRoadviewControl(mapContainer);
+        
+        // Add map type control to the top left corner
+        this.mapTypeControl = new kakao.maps.MapTypeControl();
+        this.map.addControl(this.mapTypeControl, kakao.maps.ControlPosition.TOPLEFT);
 
         // Initialize click handler
         this.setupMapClickHandler();
@@ -294,6 +299,9 @@ export class KakaoMapsProvider implements IMapProvider {
     public setMapType(mapTypeId: string): void {
         if (this.map) {
             let kakaoMapTypeId: kakao.maps.MapTypeId;
+            
+            // Remove any overlay map types first to avoid stacking them
+            this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
             
             switch(mapTypeId.toLowerCase()) {
                 case 'satellite':

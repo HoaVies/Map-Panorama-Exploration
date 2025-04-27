@@ -8,6 +8,10 @@ export class Map {
     private streetViewOptions: StreetViewOptions;
     private isCoverageVisible: boolean = false;
     private currentPosition: LatLng;
+    private currentHeading: number;
+    private currentPitch: number;
+    private currentZoom: number;
+    private currentMapTypeId: string;
 
     constructor(
         provider: IMapProvider,
@@ -22,6 +26,10 @@ export class Map {
         this.options = options;
         this.streetViewOptions = streetViewOptions;
         this.currentPosition = streetViewOptions.position;
+        this.currentHeading = streetViewOptions.pov.heading;
+        this.currentPitch = streetViewOptions.pov.pitch;
+        this.currentZoom = options.zoom;
+        this.currentMapTypeId = options.mapTypeId;
     }
 
     public initialize(): void {
@@ -61,6 +69,8 @@ export class Map {
 
         this.provider.onStreetViewChange((position: LatLng, heading: number, pitch: number) => {
             this.currentPosition = position;
+            this.currentHeading = heading;
+            this.currentPitch = pitch;
             
             // Update map center and pegman
             this.provider.setCenter(position);
@@ -80,10 +90,12 @@ export class Map {
     }
 
     public setMapType(mapTypeId: string): void {
+        this.currentMapTypeId = mapTypeId;
         this.provider.setMapType(mapTypeId);
     }
 
     public setZoom(zoom: number): void {
+        this.currentZoom = zoom;
         this.provider.setZoom(zoom);
     }
 
@@ -105,7 +117,6 @@ export class Map {
     private updateLocationInfo(position: LatLng): void {
         const infoElement = document.getElementById('location-info');
         if (infoElement) {
-
             infoElement.innerHTML = `Lat: ${position.lat.toFixed(6)}, Lng: ${position.lng.toFixed(6)}`;
             infoElement.style.display = 'block';
             
@@ -121,5 +132,23 @@ export class Map {
                 infoElement.style.display = 'none';
             }, 3000);
         }
+    }
+
+    public getCurrentState(): {
+        position: LatLng;
+        heading: number;
+        pitch: number;
+        zoom: number;
+        mapTypeId: string;
+        isCoverageVisible: boolean;
+    } {
+        return {
+            position: this.currentPosition,
+            heading: this.currentHeading,
+            pitch: this.currentPitch,
+            zoom: this.currentZoom,
+            mapTypeId: this.currentMapTypeId,
+            isCoverageVisible: this.isCoverageVisible
+        };
     }
 }

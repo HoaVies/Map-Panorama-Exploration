@@ -185,7 +185,7 @@ export class YandexMapsProvider implements IMapProvider {
     }
 
     public hideCoverage(): void {
-        this.coverageShown = false;
+        this.coverageShown = true;
     }
 
     public onMapClick(callback: (position: LatLng) => void): void {

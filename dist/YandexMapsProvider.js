@@ -154,7 +154,7 @@ export class YandexMapsProvider {
         console.warn('Direct panorama coverage display is not available in Yandex Maps API');
     }
     hideCoverage() {
-        this.coverageShown = false;
+        this.coverageShown = true;
     }
     onMapClick(callback) {
         this.mapClickCallback = callback;

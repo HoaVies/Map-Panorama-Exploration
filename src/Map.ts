@@ -134,6 +134,7 @@ export class Map {
         }
     }
 
+    // Methods to get the current state 
     public getCurrentState(): {
         position: LatLng;
         heading: number;

@@ -7,6 +7,10 @@ export class Map {
         this.options = options;
         this.streetViewOptions = streetViewOptions;
         this.currentPosition = streetViewOptions.position;
+        this.currentHeading = streetViewOptions.pov.heading;
+        this.currentPitch = streetViewOptions.pov.pitch;
+        this.currentZoom = options.zoom;
+        this.currentMapTypeId = options.mapTypeId;
     }
     initialize() {
         // Initialize map
@@ -36,6 +40,8 @@ export class Map {
         });
         this.provider.onStreetViewChange((position, heading, pitch) => {
             this.currentPosition = position;
+            this.currentHeading = heading;
+            this.currentPitch = pitch;
             // Update map center and pegman
             this.provider.setCenter(position);
             this.provider.setPegmanPosition(position);
@@ -50,9 +56,11 @@ export class Map {
         });
     }
     setMapType(mapTypeId) {
+        this.currentMapTypeId = mapTypeId;
         this.provider.setMapType(mapTypeId);
     }
     setZoom(zoom) {
+        this.currentZoom = zoom;
         this.provider.setZoom(zoom);
     }
     setCenter(position) {
@@ -83,5 +91,16 @@ export class Map {
                 infoElement.style.display = 'none';
             }, 3000);
         }
+    }
+    // Methods to get the current state 
+    getCurrentState() {
+        return {
+            position: this.currentPosition,
+            heading: this.currentHeading,
+            pitch: this.currentPitch,
+            zoom: this.currentZoom,
+            mapTypeId: this.currentMapTypeId,
+            isCoverageVisible: this.isCoverageVisible
+        };
     }
 }

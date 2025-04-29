@@ -4,18 +4,61 @@ import { KakaoMapsProvider } from './KakaoMapsProvider.js';
 import { YandexMapsProvider } from './YandexMapsProvider.js';
 import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvider.js';
 
-// Common map options
-const mapOptions: MapOptions = {
-    center: { lat: 37.5665, lng: 126.9780 }, // Seoul
-    zoom: 12,
-    mapTypeId: 'roadmap'
+// // Common map options
+// const mapOptions: MapOptions = {
+//     center: { lat: 37.5665, lng: 126.9780 }, // Seoul
+//     zoom: 12,
+//     mapTypeId: 'roadmap'
+// };
+
+// const streetViewOptions: StreetViewOptions = {
+//     position: { lat: 37.5665, lng: 126.9780 },
+//     pov: {
+//         heading: 0,
+//         pitch: 0
+//     }
+// };
+
+// Define default map options for each provider
+const defaultMapOptions: Record<string, MapOptions> = {
+    google: {
+        center: { lat: 37.5665, lng: 126.9780 }, // Seoul
+        zoom: 12,
+        mapTypeId: 'roadmap'
+    },
+    kakao: {
+        center: { lat: 37.5665, lng: 126.9780 }, // Seoul
+        zoom: 12,
+        mapTypeId: 'roadmap'
+    },
+    yandex: {
+        center: { lat: 55.751244, lng: 37.618423 }, // Moscow
+        zoom: 12,
+        mapTypeId: 'roadmap'
+    }
 };
 
-const streetViewOptions: StreetViewOptions = {
-    position: { lat: 37.5665, lng: 126.9780 },
-    pov: {
-        heading: 0,
-        pitch: 0
+const defaultStreetViewOptions: Record<string, StreetViewOptions> = {
+    google: {
+        position: { lat: 37.5665, lng: 126.9780 }, // Seoul
+        pov: {
+            heading: 0,
+            pitch: 0
+        }
+    },
+    kakao: {
+        position: { lat: 37.5665, lng: 126.9780 }, // Seoul
+        pov: {
+            heading: 0,
+            pitch: 0
+        }
+    },
+    yandex: {
+        position: { lat: 55.751244, lng: 37.618423 }, // Moscow
+        pov: {
+            heading: 0,
+            pitch: 0
+        }
     }
 };
 
@@ -49,6 +92,10 @@ function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
             currentProvider = new KakaoMapsProvider();
         }
 
+        // Get the provider-specific options (make a copy to avoid modifying the original)
+        const mapOptions = { ...defaultMapOptions[providerType] };
+        const streetViewOptions = { ...defaultStreetViewOptions[providerType] };
+        
         // Create a new map instance with the provider
         map = new Map(
             currentProvider,

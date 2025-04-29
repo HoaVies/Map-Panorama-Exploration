@@ -79,7 +79,7 @@ export class KakaoMapsProvider {
         this.mapTypeControl = document.createElement('div');
         this.mapTypeControl.style.position = 'absolute';
         this.mapTypeControl.style.top = '10px';
-        this.mapTypeControl.style.left = '65px'; // Position to the right of roadview control
+        this.mapTypeControl.style.left = '65px';
         this.mapTypeControl.style.backgroundColor = 'white';
         this.mapTypeControl.style.borderRadius = '4px';
         this.mapTypeControl.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.3)';
@@ -169,7 +169,7 @@ export class KakaoMapsProvider {
         this.overlayOn = true;
         // Add roadview overlay to map
         this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-        // Position pegman at provided position or current center if needed
+        // Position pegman at provided position
         if (position && this.pegmanMarker) {
             this.pegmanMarker.setPosition(new kakao.maps.LatLng(position.lat, position.lng));
         }
@@ -323,7 +323,6 @@ export class KakaoMapsProvider {
     setCenter(position) {
         if (this.map) {
             this.map.setCenter(new kakao.maps.LatLng(position.lat, position.lng));
-            // Update pegman position when center changes
             if (this.pegmanMarker) {
                 this.pegmanMarker.setPosition(new kakao.maps.LatLng(position.lat, position.lng));
             }

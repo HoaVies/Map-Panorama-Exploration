@@ -21,48 +21,58 @@ export class YandexMapsProvider {
     }
     initializeMap(containerId, options) {
         ymaps.ready(() => {
-            // Current Yandex Map initialization code goes here
             const container = document.getElementById(containerId);
             if (!container) {
                 throw new Error(`Container element with ID "${containerId}" not found`);
             }
-            // Use the provided options directly, which should contain Moscow coordinates
+            // Ensure container has proper dimensions (if needed)
+            container.style.width = '100%';
+            container.style.height = '100%';
+            container.style.minHeight = '300px';
             const center = [options.center.lat, options.center.lng];
             console.log("Initializing Yandex Map with center:", center);
-            // Map the mapTypeId to Yandex equivalent
+            // Use CORRECT Yandex map type format
             let mapType;
             switch (options.mapTypeId) {
                 case 'roadmap':
-                    mapType = 'map';
+                    mapType = 'yandex#map'; // FIXED: Added 'yandex#' prefix
                     break;
                 case 'satellite':
-                    mapType = 'satellite';
+                    mapType = 'yandex#satellite'; // FIXED: Added 'yandex#' prefix
                     break;
                 case 'hybrid':
-                    mapType = 'hybrid';
+                    mapType = 'yandex#hybrid'; // FIXED: Added 'yandex#' prefix
                     break;
                 default:
-                    mapType = 'map';
+                    mapType = 'yandex#map'; // FIXED: Added 'yandex#' prefix
             }
-            // Initialize Yandex Map
-            this.map = new ymaps.Map(container, {
-                center: center,
-                zoom: options.zoom,
-                type: mapType,
-                controls: ['zoomControl', 'fullscreenControl', 'typeSelector']
-            });
-            // Create pegman marker
-            this.pegman = new ymaps.Placemark(center, {
-                hintContent: 'Pegman - Drag to view street panorama'
-            }, {
-                preset: 'islands#bluePersonIcon', // Person icon for pegman
-                draggable: true,
-                visible: false // Initially hidden
-            });
-            // Add pegman to the map
-            this.map.geoObjects.add(this.pegman);
-            // Set up event listeners for the map
-            this.setupMapEventListeners();
+            // Add short delay to ensure DOM is ready
+            setTimeout(() => {
+                try {
+                    // Initialize Yandex Map
+                    this.map = new ymaps.Map(container, {
+                        center: center,
+                        zoom: options.zoom,
+                        type: mapType, // FIXED: Using correct map type
+                        controls: ['zoomControl', 'fullscreenControl', 'typeSelector']
+                    });
+                    console.log("Yandex Map created successfully");
+                    // Create pegman marker
+                    this.pegman = new ymaps.Placemark(center, {
+                        hintContent: 'Pegman - Drag to view street panorama'
+                    }, {
+                        preset: 'islands#bluePersonIcon',
+                        draggable: true
+                    });
+                    // Add pegman to the map
+                    this.map.geoObjects.add(this.pegman);
+                    // Set up event listeners for the map
+                    this.setupMapEventListeners();
+                }
+                catch (error) {
+                    console.error("Error creating Yandex map:", error);
+                }
+            }, 100); // Small delay to ensure DOM is ready
         });
     }
     setCenter(position) {
@@ -82,16 +92,16 @@ export class YandexMapsProvider {
         let mapType;
         switch (mapTypeId) {
             case 'roadmap':
-                mapType = 'map';
+                mapType = 'yandex#map';
                 break;
             case 'satellite':
-                mapType = 'satellite';
+                mapType = 'yandex#satellite';
                 break;
             case 'hybrid':
-                mapType = 'hybrid';
+                mapType = 'yandex#hybrid';
                 break;
             default:
-                mapType = 'map';
+                mapType = 'yandex#map';
         }
         this.map.setType(mapType);
     }

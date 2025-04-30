@@ -1,5 +1,3 @@
-// Fixes for the KakaoMapsProvider to address the coverage toggle and position update issues
-
 import { IMapProvider, LatLng, MapOptions, StreetViewOptions } from './IMapProvider.js';
 
 export class KakaoMapsProvider implements IMapProvider {
@@ -14,8 +12,14 @@ export class KakaoMapsProvider implements IMapProvider {
     private terrainCheckbox: HTMLInputElement | null = null;
     private overlayOn: boolean = false;
     private isProcessingEvent: boolean = false;
-    private hasInitializedRoadviewListener: boolean = false;
+    private isRoadviewInitialized: boolean = false;
     private currentPosition: LatLng | null = null;
+    
+    // Store pending POV settings that should be applied after initialization
+    private pendingHeading: number | null = null;
+    private pendingPitch: number | null = null;
+    private pendingPovInterval: any = null; // For repeated attempts to set POV
+    private forceNextPov: boolean = false; // Flag to force POV on next pano load
 
     public initializeMap(containerId: string, options: MapOptions): void {
         const mapContainer = document.getElementById(containerId);
@@ -178,58 +182,21 @@ export class KakaoMapsProvider implements IMapProvider {
         }
     }
 
-    public showCoverage(position?: LatLng): void {
-        if (!this.map) return;
-        
-        this.overlayOn = true;
-        
-        // Update the roadview control appearance
-        if (this.roadviewControl) {
-            this.roadviewControl.className = 'active';
-            this.roadviewControl.style.backgroundPosition = '0 -350px';
-        }
-        
-        // Add roadview overlay to map
-        this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-        
-        // Show pegman marker on map
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setMap(this.map);
-            
-            // Position pegman at map center or provided position
-            const targetPosition = position ? 
-                new kakao.maps.LatLng(position.lat, position.lng) : 
-                this.map.getCenter();
-            this.pegmanMarker.setPosition(targetPosition);
-        }
-    }
-
-    public hideCoverage(): void {
-        if (!this.map) return;
-        
-        this.overlayOn = false;
-        
-        // Update the roadview control appearance
-        if (this.roadviewControl) {
-            this.roadviewControl.className = '';
-            this.roadviewControl.style.backgroundPosition = '0 -450px';
-        }
-        
-        // Remove roadview overlay
-        this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-        
-        // Hide pegman marker
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setMap(null);
-        }
-    }
-
     public initializeStreetView(containerId: string, options: StreetViewOptions): void {
+        // Clear any existing interval for POV setting
+        if (this.pendingPovInterval) {
+            clearInterval(this.pendingPovInterval);
+            this.pendingPovInterval = null;
+        }
+
         const roadviewContainer = document.getElementById(containerId);
         if (!roadviewContainer) {
             console.error('Street view container not found');
             return;
         }
+
+        // Reset initialization flag
+        this.isRoadviewInitialized = false;
 
         // Create roadview object
         this.roadview = new kakao.maps.Roadview(roadviewContainer);
@@ -254,67 +221,51 @@ export class KakaoMapsProvider implements IMapProvider {
 
         // Set initial roadview position
         this.currentPosition = options.position;
-        this.setRoadviewPosition(options.position);
         
-        // Add position_changed event listener to roadview
+        // IMPORTANT: Store the initial POV settings to apply after initialization
+        this.pendingHeading = options.pov.heading;
+        this.pendingPitch = options.pov.pitch;
+        this.forceNextPov = true; // Force POV on first pano load
+        
+        console.log(`Kakao init: Storing initial POV heading=${this.pendingHeading}, pitch=${this.pendingPitch}, forcing next POV`);
+        
+        // Setup roadview events before setting position to catch initialization
         this.setupRoadviewEvents();
         
         // Add dragend event to pegman marker
         this.setupPegmanEvents();
-    }
-
-    private setupMapClickHandler(): void {
-        if (!this.map) return;
         
-        kakao.maps.event.addListener(this.map, 'click', (mouseEvent: any) => {
-            // Don't process if we're already handling an event to prevent loops
-            if (this.isProcessingEvent) return;
-            
-            this.isProcessingEvent = true;
-            try {
-                // Only handle clicks when roadview overlay is active
-                if (!this.overlayOn) {
-                    return;
-                }
-                
-                const latlng = mouseEvent.latLng;
-                
-                // Update current position
-                this.currentPosition = {
-                    lat: latlng.getLat(),
-                    lng: latlng.getLng()
-                };
-                
-                if (this.mapClickCallback && latlng) {
-                    this.mapClickCallback({
-                        lat: latlng.getLat(),
-                        lng: latlng.getLng()
-                    });
-                }
-                
-                // If pegman marker exists, update its position
-                if (this.pegmanMarker) {
-                    this.pegmanMarker.setPosition(latlng);
-                }
-                
-                // Try to set street view at clicked position
-                this.setRoadviewPosition({
-                    lat: latlng.getLat(),
-                    lng: latlng.getLng()
-                });
-            } finally {
-                this.isProcessingEvent = false;
-            }
-        });
+        // Now set the position which will trigger initialization
+        this.setRoadviewPosition(options.position);
     }
 
     private setupRoadviewEvents(): void {
-        if (!this.roadview || this.hasInitializedRoadviewListener) return;
+        if (!this.roadview) return;
         
-        this.hasInitializedRoadviewListener = true;
+        // Listen for the init event to know when the roadview is ready
+        kakao.maps.event.addListener(this.roadview, 'init', () => {
+            console.log('Kakao roadview initialized');
+            this.isRoadviewInitialized = true;
+            
+            // Set up a timer to repeatedly try to apply the pending POV
+            // This helps overcome any internal Kakao defaults that might override our settings
+            if (this.pendingHeading !== null && this.pendingPitch !== null) {
+                this.applyPendingPov();
+            }
+        });
+
+        // Also listen for pano_changed to catch when a new panorama is loaded
+        kakao.maps.event.addListener(this.roadview, 'pano_changed', () => {
+            console.log('Kakao panorama changed, force next POV:', this.forceNextPov);
+            if (this.forceNextPov && this.pendingHeading !== null && this.pendingPitch !== null) {
+                // When a new panorama is loaded and we have pending POV, apply it with a delay
+                setTimeout(() => {
+                    this.applyPendingPov();
+                }, 500);
+            }
+        });
         
         kakao.maps.event.addListener(this.roadview, 'position_changed', () => {
-            // Don't process if we're already handling an event to prevent loops
             if (this.isProcessingEvent) return;
             
             this.isProcessingEvent = true;
@@ -323,12 +274,6 @@ export class KakaoMapsProvider implements IMapProvider {
                 
                 const rvPosition = this.roadview.getPosition();
                 if (!rvPosition) return;
-                
-                // Update current position
-                this.currentPosition = {
-                    lat: rvPosition.getLat(),
-                    lng: rvPosition.getLng()
-                };
                 
                 // Update map center
                 if (this.map) {
@@ -355,7 +300,6 @@ export class KakaoMapsProvider implements IMapProvider {
         });
         
         kakao.maps.event.addListener(this.roadview, 'viewpoint_changed', () => {
-            // Don't process if we're already handling an event to prevent loops
             if (this.isProcessingEvent) return;
             
             this.isProcessingEvent = true;
@@ -376,6 +320,65 @@ export class KakaoMapsProvider implements IMapProvider {
                 this.isProcessingEvent = false;
             }
         });
+    }
+
+    // New method to apply pending POV with multiple attempts
+    private applyPendingPov(): void {
+        if (!this.roadview || this.pendingHeading === null || this.pendingPitch === null) return;
+
+        console.log(`Applying pending POV: heading=${this.pendingHeading}, pitch=${this.pendingPitch}`);
+        
+        // Clear any existing interval
+        if (this.pendingPovInterval) {
+            clearInterval(this.pendingPovInterval);
+        }
+        
+        // Set POV immediately
+        this.roadview.setViewpoint({
+            pan: this.pendingHeading,
+            tilt: this.pendingPitch,
+            zoom: 0
+        });
+        
+        // Set up an interval to reapply the POV several times to overcome any internal resets
+        let attempts = 0;
+        this.pendingPovInterval = setInterval(() => {
+            if (!this.roadview || !this.isRoadviewInitialized) {
+                clearInterval(this.pendingPovInterval);
+                this.pendingPovInterval = null;
+                return;
+            }
+            
+            // Check current POV against what we want
+            const currentViewpoint = this.roadview.getViewpoint();
+            const headingDiff = Math.abs(currentViewpoint.pan - this.pendingHeading!);
+            const pitchDiff = Math.abs(currentViewpoint.tilt - this.pendingPitch!);
+            
+            // If the POV is close enough to what we want, stop trying
+            if (headingDiff < 1 && pitchDiff < 1) {
+                console.log('POV successfully set to desired values');
+                clearInterval(this.pendingPovInterval);
+                this.pendingPovInterval = null;
+                this.forceNextPov = false; // We've successfully set the POV
+                return;
+            }
+            
+            // Otherwise, try again
+            if (attempts < 5) {
+                console.log(`Retrying POV (attempt ${attempts+1}): heading=${this.pendingHeading}, pitch=${this.pendingPitch}`);
+                this.roadview.setViewpoint({
+                    pan: this.pendingHeading!,
+                    tilt: this.pendingPitch!,
+                    zoom: 0
+                });
+                attempts++;
+            } else {
+                console.log('Max POV setting attempts reached');
+                clearInterval(this.pendingPovInterval);
+                this.pendingPovInterval = null;
+                this.forceNextPov = false; // Give up after 5 attempts
+            }
+        }, 300); // Try every 300ms
     }
 
     private setupPegmanEvents(): void {
@@ -407,16 +410,22 @@ export class KakaoMapsProvider implements IMapProvider {
         });
     }
 
-    private setRoadviewPosition(position: LatLng): void {
+    private setRoadviewPosition(position: LatLng, heading?: number, pitch?: number): void {
         if (!this.roadviewClient || !this.roadview) return;
         
         const kakaoPosition = new kakao.maps.LatLng(position.lat, position.lng);
         
-        // Store the position so we can access it later
-        this.currentPosition = position;
+        // MODIFIED: If heading and pitch are provided, store them as pending
+        if (heading !== undefined && pitch !== undefined) {
+            this.pendingHeading = heading;
+            this.pendingPitch = pitch;
+            this.forceNextPov = true; // Force POV application when pano changes
+            console.log(`Setting pending POV for next position: heading=${heading}, pitch=${pitch}`);
+        }
         
         this.roadviewClient.getNearestPanoId(kakaoPosition, 50, (panoId: string | null) => {
             if (panoId && this.roadview) {
+                // First set the panorama ID and position
                 this.roadview.setPanoId(panoId, kakaoPosition);
                 
                 // Make sure the roadview container is visible
@@ -425,7 +434,7 @@ export class KakaoMapsProvider implements IMapProvider {
                     container.style.display = 'block';
                 }
                 
-                // Update pegman position if it exists and overlay is active
+                // Update pegman position
                 if (this.pegmanMarker && this.overlayOn) {
                     this.pegmanMarker.setPosition(kakaoPosition);
                 }
@@ -435,6 +444,16 @@ export class KakaoMapsProvider implements IMapProvider {
                 const container = document.getElementById('street-view-container');
                 if (container) {
                     container.style.display = 'none';
+                }
+                
+                // Clear pending POV since we couldn't set a panorama
+                this.pendingHeading = null;
+                this.pendingPitch = null;
+                this.forceNextPov = false;
+                
+                if (this.pendingPovInterval) {
+                    clearInterval(this.pendingPovInterval);
+                    this.pendingPovInterval = null;
                 }
             }
         });
@@ -483,23 +502,38 @@ export class KakaoMapsProvider implements IMapProvider {
     }
 
     public setStreetViewPosition(position: LatLng): void {
-        // Update current position
-        this.currentPosition = position;
-        
         const kakaoPosition = new kakao.maps.LatLng(position.lat, position.lng);
         if (this.pegmanMarker && this.overlayOn) {
             this.pegmanMarker.setPosition(kakaoPosition);
         }
-        this.setRoadviewPosition(position);
+        
+        // For Kakao, we need to preserve the current orientation when changing position
+        if (this.roadview && this.isRoadviewInitialized) {
+            const currentViewpoint = this.roadview.getViewpoint();
+            this.setRoadviewPosition(position, currentViewpoint.pan, currentViewpoint.tilt);
+        } else {
+            // If there are pending heading/pitch values, use those
+            if (this.pendingHeading !== null && this.pendingPitch !== null) {
+                this.setRoadviewPosition(position, this.pendingHeading, this.pendingPitch);
+            } else {
+                this.setRoadviewPosition(position);
+            }
+        }
     }
 
     public setStreetViewPOV(heading: number, pitch: number): void {
-        if (this.roadview) {
-            this.roadview.setViewpoint({
-                pan: heading,
-                tilt: pitch,
-                zoom: 0
-            });
+        console.log(`Kakao: setStreetViewPOV heading=${heading}, pitch=${pitch}`);
+        
+        // Always store as pending, regardless of initialization state
+        this.pendingHeading = heading;
+        this.pendingPitch = pitch;
+        this.forceNextPov = true;
+        
+        if (this.roadview && this.isRoadviewInitialized) {
+            // If roadview is already initialized, apply immediately and set up repeated attempts
+            this.applyPendingPov();
+        } else {
+            console.log(`Kakao: Stored POV heading=${heading}, pitch=${pitch} as pending`);
         }
     }
 
@@ -520,6 +554,97 @@ export class KakaoMapsProvider implements IMapProvider {
                 this.pegmanMarker.setMap(null);
             }
         }
+    }
+
+    public showCoverage(position?: LatLng): void {
+        if (!this.map) return;
+        
+        this.overlayOn = true;
+        
+        // Update the roadview control appearance
+        if (this.roadviewControl) {
+            this.roadviewControl.className = 'active';
+            this.roadviewControl.style.backgroundPosition = '0 -350px';
+        }
+        
+        // Add roadview overlay to map
+        this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+        
+        // Show pegman marker on map
+        if (this.pegmanMarker) {
+            this.pegmanMarker.setMap(this.map);
+            
+            // Position pegman at map center or provided position
+            const targetPosition = position ? 
+                new kakao.maps.LatLng(position.lat, position.lng) : 
+                this.map.getCenter();
+            this.pegmanMarker.setPosition(targetPosition);
+        }
+    }
+
+    public hideCoverage(): void {
+        if (!this.map) return;
+        
+        this.overlayOn = false;
+        
+        // Update the roadview control appearance
+        if (this.roadviewControl) {
+            this.roadviewControl.className = '';
+            this.roadviewControl.style.backgroundPosition = '0 -450px';
+        }
+        
+        // Remove roadview overlay
+        this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+        
+        // Hide pegman marker
+        if (this.pegmanMarker) {
+            this.pegmanMarker.setMap(null);
+        }
+    }
+
+    private setupMapClickHandler(): void {
+        if (!this.map) return;
+        
+        kakao.maps.event.addListener(this.map, 'click', (mouseEvent: any) => {
+            // Don't process if we're already handling an event to prevent loops
+            if (this.isProcessingEvent) return;
+            
+            this.isProcessingEvent = true;
+            try {
+                // Only handle clicks when roadview overlay is active
+                if (!this.overlayOn) {
+                    return;
+                }
+                
+                const latlng = mouseEvent.latLng;
+                
+                // Update current position
+                this.currentPosition = {
+                    lat: latlng.getLat(),
+                    lng: latlng.getLng()
+                };
+                
+                if (this.mapClickCallback && latlng) {
+                    this.mapClickCallback({
+                        lat: latlng.getLat(),
+                        lng: latlng.getLng()
+                    });
+                }
+                
+                // If pegman marker exists, update its position
+                if (this.pegmanMarker) {
+                    this.pegmanMarker.setPosition(latlng);
+                }
+                
+                // Try to set street view at clicked position
+                this.setRoadviewPosition({
+                    lat: latlng.getLat(),
+                    lng: latlng.getLng()
+                });
+            } finally {
+                this.isProcessingEvent = false;
+            }
+        });
     }
 
     public onMapClick(callback: (position: LatLng) => void): void {

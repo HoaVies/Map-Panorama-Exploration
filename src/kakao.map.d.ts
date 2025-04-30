@@ -143,6 +143,7 @@ declare namespace kakao.maps {
         pan?: number;
         tilt?: number;
         zoom?: number;
+        scrollwheel?: boolean;
     }
 
     interface CustomOverlayOptions {

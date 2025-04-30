@@ -61,7 +61,7 @@ export class Map {
             
             // If coverage is being shown, update it
             if (this.isCoverageVisible) {
-                this.showCoverage(position);
+                this.provider.showCoverage(position);
             }
             
             this.updateLocationInfo(position);
@@ -81,7 +81,7 @@ export class Map {
             
             // If coverage is being shown, update it
             if (this.isCoverageVisible) {
-                this.showCoverage(position);
+                this.provider.showCoverage(position);
             }
             
             // Update location info
@@ -112,6 +112,14 @@ export class Map {
     public hideCoverage(): void {
         this.isCoverageVisible = false;
         this.provider.hideCoverage();
+    }
+    
+    public toggleCoverage(): void {
+        if (this.isCoverageVisible) {
+            this.hideCoverage();
+        } else {
+            this.showCoverage();
+        }
     }
     
     private updateLocationInfo(position: LatLng): void {

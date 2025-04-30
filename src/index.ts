@@ -6,10 +6,10 @@ import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvi
 import { CoordinateTranslator } from './CoordinateTranslator.js';
 import { StreetViewFinder } from './StreetViewFinder.js';
 
-// Common map options (default values, will be updated when switching providers)
+// Common map options (these are the default values, will be updated when switching providers)
 const mapOptions: MapOptions = {
     center: { lat: 37.5665, lng: 126.9780 }, // Seoul
-    zoom: 12,
+    zoom: 10,
     mapTypeId: 'roadmap'
 };
 
@@ -24,18 +24,22 @@ const streetViewOptions: StreetViewOptions = {
 // Create map providers
 let currentProvider: IMapProvider;
 let map: Map;
-let currentProviderType: 'google' | 'kakao' = 'google';
+let currentProviderType: 'google' | 'kakao' | 'yandex' = 'google';
 let currentState = {
     position: { lat: 37.5665, lng: 126.9780 },
     heading: 0,
     pitch: 0,
-    zoom: 12,
+    zoom: 10,
     mapTypeId: 'roadmap',
     isCoverageVisible: false
 };
 
-// Initialize a map provider with synchronized position
-async function initializeMap(providerType: 'google' | 'kakao') {
+// Function to initialize a map provider with synchronized position
+/**
+ * This function updates the handling of the isCoverageVisible state when switching providers.
+ * It's particularly focused on Kakao which has a different coverage behavior.
+ */
+async function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
     console.log(`Initializing ${providerType} Maps provider`);
     
     // Store current state if map exists
@@ -62,6 +66,7 @@ async function initializeMap(providerType: 'google' | 'kakao') {
     
     if (streetViewContainer) {
         streetViewContainer.innerHTML = '';
+        // Reset the display property to ensure proper initialization
         streetViewContainer.style.display = 'block';
     }
     
@@ -87,13 +92,18 @@ async function initializeMap(providerType: 'google' | 'kakao') {
             }
         } catch (error) {
             console.warn('Could not find nearest street view position:', error);
+            // Fall back to the translated position
         }
         
         // Create the selected map provider
         if (providerType === 'google') {
             currentProvider = new GoogleMapsProvider();
+        } else if (providerType === 'yandex'){
+            currentProvider = new YandexMapsProvider();
         } else {
+            // Use the fixed KakaoMapsProvider implementation
             currentProvider = new KakaoMapsProvider();
+            console.log('Initializing Kakao provider with fixed heading/pitch handling');
         }
 
         // Update current provider type
@@ -101,7 +111,7 @@ async function initializeMap(providerType: 'google' | 'kakao') {
 
         // Update options with translated/nearest position
         const updatedMapOptions: MapOptions = {
-            center: translatedPosition, 
+            center: translatedPosition, // Center the map on the translated position
             zoom: currentState.zoom,
             mapTypeId: currentState.mapTypeId
         };
@@ -126,24 +136,58 @@ async function initializeMap(providerType: 'google' | 'kakao') {
         // Initialize the map
         map.initialize();
         
-        // Restore coverage visibility if it was visible
+        // Handle coverage visibility differently based on provider
         if (currentState.isCoverageVisible) {
-            map.showCoverage(translatedPosition);
+            if (providerType === 'kakao') {
+                // For Kakao, we need to manually toggle the coverage overlay
+                // by simulating a click on the roadview control
+                setTimeout(() => {
+                    const roadviewControl = document.getElementById('roadviewControl');
+                    if (roadviewControl) {
+                        roadviewControl.click();
+                    } else {
+                        // Fallback to the provider's showCoverage method
+                        map.showCoverage(translatedPosition);
+                    }
+                }, 500);
+            } else {
+                // For other providers, use the standard method
+                map.showCoverage(translatedPosition);
+            }
         }
         
         // Explicitly force panorama visibility if it was previously visible
-        if (wasPanoramaVisible) {
-            // Ensure the coverage is shown
-            map.showCoverage(currentState.position);
+        if (providerType === 'kakao') {
+            // For Kakao, we'll use our improved implementation that tracks initialization
+            // and stores pending heading/pitch values
+            console.log(`Preparing Kakao with heading=${currentState.heading}, pitch=${currentState.pitch}`);
             
-            // Force panorama at the current position
+            // First set POV so it's stored as pending values
+            currentProvider.setStreetViewPOV(currentState.heading, currentState.pitch);
+            
+            // Then set position which will trigger initialization and apply POV when ready
             setTimeout(() => {
-                currentProvider.setStreetViewPosition(currentState.position);
+                currentProvider.setStreetViewPosition(translatedPosition);
                 currentProvider.setPegmanVisible(true);
                 
-                if (providerType === 'kakao') {
-                    tryForceKakaoPanorama(currentState.position);
+                // Make sure container is visible
+                const container = document.getElementById('street-view-container');
+                if (container) {
+                    container.style.display = 'block';
                 }
+            }, 500);
+        } else {
+            // For other providers, use the original approach
+            setTimeout(() => {
+                // First set the position
+                currentProvider.setStreetViewPosition(translatedPosition);
+                currentProvider.setPegmanVisible(true);
+                
+                // Then set the orientation (heading and pitch) with a small delay
+                setTimeout(() => {
+                    currentProvider.setStreetViewPOV(currentState.heading, currentState.pitch);
+                    console.log(`Setting orientation: heading=${currentState.heading}, pitch=${currentState.pitch}`);
+                }, 1000);
             }, 500);
         }
         
@@ -163,7 +207,7 @@ async function initializeMap(providerType: 'google' | 'kakao') {
     }
 }
 
-// Force Kakao panorama specifically
+// Helper function to force Kakao panorama specifically
 function tryForceKakaoPanorama(position: LatLng) {
     if (window.kakao && window.kakao.maps) {
         const roadviewClient = new kakao.maps.RoadviewClient();
@@ -188,12 +232,12 @@ function tryForceKakaoPanorama(position: LatLng) {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, setting up provider selector');
     
-    // Create a status element for sync notifications
+    // Create a status element for sync notifications if it doesn't exist
     if (!document.getElementById('sync-status')) {
         const statusElement = document.createElement('div');
         statusElement.id = 'sync-status';
         statusElement.style.position = 'fixed';
-        statusElement.style.top = '75px';
+        statusElement.style.top = '10px';
         statusElement.style.left = '50%';
         statusElement.style.transform = 'translateX(-50%)';
         statusElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
@@ -209,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (providerSelector) {
         providerSelector.addEventListener('change', () => {
-            const selectedProvider = providerSelector.value as 'google' | 'kakao';
+            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex';
             console.log(`Provider changed to: ${selectedProvider}`);
             initializeMap(selectedProvider);
         });
@@ -239,6 +283,7 @@ document.addEventListener('keyup', (event) => {
 document.addEventListener('contextmenu', (event) => {
     if (isShiftPressed) {
         event.preventDefault();
+        // Handle quick drop functionality
     }
 });
 
@@ -265,6 +310,12 @@ declare global {
                 event?: {
                     addListener: Function;
                 };
+            };
+        };
+        ymaps?: {
+            panorama?: {
+                locate: (point: number[]) => Promise<any[]>;
+                createPlayer: (container: HTMLElement | string, point: number[], options?: any) => Promise<any>;
             };
         };
     }

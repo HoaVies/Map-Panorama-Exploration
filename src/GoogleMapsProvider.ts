@@ -78,7 +78,8 @@ export class GoogleMapsProvider implements IMapProvider {
         if (!this.pegmanMarker) {
             this.pegmanMarker = new google.maps.Marker({
                 map: this.map ?? undefined,
-                position: new google.maps.LatLng(position.lat, position.lng)
+                position: new google.maps.LatLng(position.lat, position.lng),
+                visible: false,
             });
         } else {
             this.pegmanMarker.setPosition(new google.maps.LatLng(position.lat, position.lng));

@@ -26,6 +26,7 @@ export class CoordinateTranslator {
             return position;
         }
         
+        // For Kakao Maps specifically, you might need WGS84 to WCONGNAMUL conversion
         if (fromProvider === 'google' && toProvider === 'kakao') {
             return this.googleToKakao(position);
         }

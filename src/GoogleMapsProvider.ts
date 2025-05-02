@@ -5,6 +5,7 @@ export class GoogleMapsProvider implements IMapProvider {
     private streetView: google.maps.StreetViewPanorama | null = null;
     private pegmanMarker: google.maps.Marker | null = null;
     private coveragePolygon: google.maps.Polygon | null = null;
+    private streetViewChangeCallback: ((position: LatLng, heading: number, pitch: number) => void) | null = null;
 
     public initializeMap(containerId: string, options: MapOptions): void {
         const mapOptions: google.maps.MapOptions = {
@@ -17,14 +18,12 @@ export class GoogleMapsProvider implements IMapProvider {
     }
 
     public initializeStreetView(containerId: string, options: StreetViewOptions): void {
-
         const streetViewOptions: any = {
             position: new google.maps.LatLng(options.position.lat, options.position.lng),
             pov: {
                 heading: options.pov.heading,
                 pitch: options.pov.pitch
             },
-            zoom: 0,
             addressControl: true,
             enableCloseButton: true,
             linksControl: true,
@@ -41,6 +40,42 @@ export class GoogleMapsProvider implements IMapProvider {
     
         if (this.map) {
             this.map.setStreetView(this.streetView);
+        }
+        
+        // Set up event listeners for position and POV changes
+        this.setupStreetViewEventListeners();
+    }
+
+    // New method to set up event listeners for the street view
+    private setupStreetViewEventListeners(): void {
+        if (!this.streetView) return;
+        
+        // Listen for position changes
+        this.streetView.addListener('position_changed', () => {
+            this.notifyStreetViewChange();
+        });
+        
+        // IMPORTANT: Listen for POV changes
+        this.streetView.addListener('pov_changed', () => {
+            this.notifyStreetViewChange();
+        });
+    }
+    
+    // Helper method to notify about street view changes
+    private notifyStreetViewChange(): void {
+        if (!this.streetView || !this.streetViewChangeCallback) return;
+            
+        const position = this.streetView.getPosition();
+        const pov = this.streetView.getPov();
+        
+        if (position) {
+            this.streetViewChangeCallback(
+                { lat: position.lat(), lng: position.lng() },
+                pov.heading,
+                pov.pitch
+            );
+            
+            console.log(`Google: Street view updated - heading=${pov.heading}, pitch=${pov.pitch}`);
         }
     }
 
@@ -78,7 +113,8 @@ export class GoogleMapsProvider implements IMapProvider {
         if (!this.pegmanMarker) {
             this.pegmanMarker = new google.maps.Marker({
                 map: this.map ?? undefined,
-                position: new google.maps.LatLng(position.lat, position.lng)
+                position: new google.maps.LatLng(position.lat, position.lng),
+                visible: false,
             });
         } else {
             this.pegmanMarker.setPosition(new google.maps.LatLng(position.lat, position.lng));
@@ -86,9 +122,6 @@ export class GoogleMapsProvider implements IMapProvider {
     }
 
     public setPegmanVisible(visible: boolean): void {
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setVisible(visible);
-        }
     }
 
     public showCoverage(position: LatLng): void {
@@ -112,20 +145,11 @@ export class GoogleMapsProvider implements IMapProvider {
     }
 
     public onStreetViewChange(callback: (position: LatLng, heading: number, pitch: number) => void): void {
+        this.streetViewChangeCallback = callback;
+        
+        // If street view is already initialized, set up the listeners
         if (this.streetView) {
-            this.streetView.addListener('position_changed', () => {
-                if (this.streetView) {
-                    const position = this.streetView.getPosition();
-                    const pov = this.streetView.getPov();
-                    if (position) {
-                        callback(
-                            { lat: position.lat(), lng: position.lng() },
-                            pov.heading,
-                            pov.pitch
-                        );
-                    }
-                }
-            });
+            this.setupStreetViewEventListeners();
         }
     }
 }

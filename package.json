@@ -7,7 +7,7 @@
     "scripts": {
       "build": "tsc",
       "start": "tsc -w",
-      "serve": "http-server -o"
+      "serve": "http-server -p 8080 -c-1 -o"
     },
     "dependencies": {
       "@types/google.maps": "^3.54.0"

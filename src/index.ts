@@ -97,14 +97,23 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
         
         // Create the selected map provider
         if (providerType === 'google') {
+            // Use the fixed GoogleMapsProvider
             currentProvider = new GoogleMapsProvider();
+            console.log('Initializing Google provider with fixed POV tracking');
         } else if (providerType === 'yandex'){
             currentProvider = new YandexMapsProvider();
         } else {
-            // Use the fixed KakaoMapsProvider implementation
+            // Use the fixed KakaoMapsProvider
             currentProvider = new KakaoMapsProvider();
             console.log('Initializing Kakao provider with fixed heading/pitch handling');
         }
+        
+        // Make sure we have appropriate logging to track what's happening
+        console.log(`Current state before provider initialization:`, JSON.stringify({
+            position: currentState.position,
+            heading: currentState.heading,
+            pitch: currentState.pitch
+        }));
 
         // Update current provider type
         currentProviderType = providerType;
@@ -135,6 +144,14 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
 
         // Initialize the map
         map.initialize();
+        
+        map.addStateChangeListener((state) => {
+            console.log(`Map state changed:`, JSON.stringify({
+                position: state.position,
+                heading: state.heading,
+                pitch: state.pitch
+            }));
+        });
         
         // Handle coverage visibility differently based on provider
         if (currentState.isCoverageVisible) {

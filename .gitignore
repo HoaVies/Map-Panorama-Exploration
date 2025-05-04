@@ -1,2 +1,7 @@
 dist/
 .idea/
+node_modules
+package-lock.json
+.vscode/chrome-debug-profile
+src/yandex.maps.d.ts
+src/YandexMapsProvider.ts

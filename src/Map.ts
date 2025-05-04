@@ -160,4 +160,22 @@ export class Map {
             isCoverageVisible: this.isCoverageVisible
         };
     }
+
+    public addStateChangeListener(callback: (state: any) => void): void {
+        this.provider.onStreetViewChange((position: LatLng, heading: number, pitch: number) => {
+            this.currentPosition = position;
+            this.currentHeading = heading;
+            this.currentPitch = pitch;
+            
+            const state = {
+                position: this.currentPosition,
+                heading: this.currentHeading,
+                pitch: this.currentPitch,
+                zoom: this.currentZoom,
+                mapTypeId: this.currentMapTypeId
+            };
+            
+            callback(state);
+        });
+    }
 }

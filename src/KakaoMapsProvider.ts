@@ -203,12 +203,12 @@ export class KakaoMapsProvider implements IMapProvider {
         
         // Create marker image for pegman
         const markImage = new kakao.maps.MarkerImage(
-            'https://t1.daumcdn.net/localimg/localimages/07/2018/pc/roadview_minimap_wk_2018.png',
+            './src/pegman.png',
             new kakao.maps.Size(26, 46),
             {
-                spriteSize: new kakao.maps.Size(1666, 168),
-                spriteOrigin: new kakao.maps.Point(705, 114),
-                offset: new kakao.maps.Point(13, 46)
+                spriteSize: new kakao.maps.Size(26, 46),    // Size of entire image
+                spriteOrigin: new kakao.maps.Point(0, 0),   // Start at top-left corner
+                offset: new kakao.maps.Point(13, 23)        // center of the image
             }
         );
         

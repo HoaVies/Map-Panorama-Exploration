@@ -1,78 +1,319 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Maps API Test</title>
+    <meta charset="utf-8">
+    <title>Yandex Maps with Panorama Viewer</title>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=0df690eb-a589-43c6-95a3-c6e506059ebc&lang=en_US" type="text/javascript"></script>
     <style>
         html, body {
+            width: 100%;
             height: 100%;
-            margin: 0;
             padding: 0;
+            margin: 0;
+        }
+        .map-container {
             display: flex;
+            height: 100vh;
         }
-        #map-test, #streetview-test {
-            height: 100%;
-            width: 50%;
+        #map {
+            flex: 1;
         }
-        #info-panel {
-            position: fixed;
+        #panorama {
+            flex: 1;
+            position: relative;
+        }
+        .no-panorama-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            text-align: center;
+            display: none;
+        }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .toggle-coverage {
+            position: absolute;
             top: 10px;
             right: 10px;
+            background: white;
             padding: 10px;
-            background-color: rgba(255, 255, 255, 0.8);
             border-radius: 5px;
-            font-family: Arial, sans-serif;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .cache-controls {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .cache-button {
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 3px;
+            background-color: #f0f0f0;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div id="map-test"></div>
-    <div id="streetview-test"></div>
-    <div id="info-panel">Coordinates: <span id="coordinates"></span></div>
+    <div class="info-panel">
+        <h3>Yandex Maps Panorama Viewer</h3>
+        <p>Click anywhere on the map to view the panorama at that location.</p>
+    </div>
+    <div class="toggle-coverage" id="toggleCoverage">
+        Show Panorama Coverage
+    </div>
+    <div class="cache-controls">
+        <div class="cache-button" id="saveCache">Save Coverage Data</div>
+        <div class="cache-button" id="loadCache">Load Coverage Data</div>
+    </div>
+    <div class="map-container">
+        <div id="map"></div>
+        <div id="panorama">
+            <div class="no-panorama-message" id="noPanoramaMessage">
+                No panorama available at this location.<br>
+                Try clicking on an area with panorama coverage.
+            </div>
+        </div>
+    </div>
 
-    <script>
-        function initMap() {
-            const mapOptions = {
-                center: { lat: 40.7128, lng: -74.0060 },
-                zoom: 12,
-                mapTypeId: google.maps.MapTypeId.ROADMAP
-            };
-            const map = new google.maps.Map(document.getElementById('map-test'), mapOptions);
-            
-            const streetViewOptions = {
-                position: { lat: 40.7128, lng: -74.0060 },
-                pov: {
-                    heading: 0,
-                    pitch: 0
-                }
-            };
-            const streetView = new google.maps.StreetViewPanorama(
-                document.getElementById('streetview-test'),
-                streetViewOptions
-            );
-            
-            map.setStreetView(streetView);
-            
-            map.addListener('click', (event) => {
-                const position = event.latLng;
-                document.getElementById('coordinates').textContent = 
-                    `${position.lat().toFixed(6)}, ${position.lng().toFixed(6)}`;
-                
-                streetView.setPosition(position);
+    <script type="text/javascript">
+        ymaps.ready(init);
+        
+        var myMap, myPlacemark;
+        var showingCoverage = false;
+        var noPanoramaMessage = document.getElementById('noPanoramaMessage');
+        var coverageMarkers = [];
+        var cachedPanoramaPoints = {};
+        
+        function init() {
+            // Create map centered on Saint Petersburg
+            myMap = new ymaps.Map('map', {
+                center: [59.9386, 30.3141], // Saint Petersburg
+                zoom: 15,
+                controls: ['zoomControl', 'fullscreenControl']
             });
             
-            streetView.addListener('position_changed', () => {
-                const position = streetView.getPosition();
-                if (position) {
-                    document.getElementById('coordinates').textContent = 
-                        `${position.lat().toFixed(6)}, ${position.lng().toFixed(6)}`;
-                }
+            // Create a draggable placemark
+            myPlacemark = new ymaps.Placemark(myMap.getCenter(), {
+                hintContent: 'Click to view panorama'
+            }, {
+                preset: 'islands#redDotIcon',
+                draggable: true
             });
+            
+            myMap.geoObjects.add(myPlacemark);
+            
+            // Handle map clicks
+            myMap.events.add('click', function(e) {
+                var coords = e.get('coords');
+                myPlacemark.geometry.setCoordinates(coords);
+                loadPanoramaAtPoint(coords);
+            });
+            
+            // Handle placemark drags
+            myPlacemark.events.add('dragend', function() {
+                loadPanoramaAtPoint(myPlacemark.geometry.getCoordinates());
+            });
+            
+            // Handle coverage toggle button
+            document.getElementById('toggleCoverage').addEventListener('click', function() {
+                togglePanoramaCoverage();
+            });
+            
+            // Handle cache buttons
+            document.getElementById('saveCache').addEventListener('click', savePanoramaCache);
+            document.getElementById('loadCache').addEventListener('click', loadPanoramaCache);
+            
+            // Load initial panorama at map center
+            loadPanoramaAtPoint(myMap.getCenter());
         }
-    </script>
-    <script async defer 
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0&callback=initMap">
+        
+        function loadPanoramaAtPoint(point) {
+            // Clear the previous panorama
+            document.getElementById('panorama').innerHTML = '';
+            
+            // Recreate the message element
+            var msgDiv = document.createElement('div');
+            msgDiv.id = 'noPanoramaMessage';
+            msgDiv.className = 'no-panorama-message';
+            msgDiv.innerHTML = 'No panorama available at this location.<br>Try clicking on an area with panorama coverage.';
+            document.getElementById('panorama').appendChild(msgDiv);
+            
+            // Update the message element reference
+            noPanoramaMessage = document.getElementById('noPanoramaMessage');
+            
+            // Use the createPlayer static function instead of manually creating the player
+            var panoContainer = document.getElementById('panorama');
+            ymaps.panorama.createPlayer(
+                panoContainer,
+                point,
+                {
+                    controls: ['zoomControl', 'fullscreenControl']
+                }
+            ).then(
+                function() {
+                    hideNoPanoramaMessage();
+                },
+                function(error) {
+                    console.error('Failed to load panorama:', error);
+                    showNoPanoramaMessage();
+                }
+            );
+        }
+        
+        function togglePanoramaCoverage() {
+            if (showingCoverage) {
+                // Clear markers
+                coverageMarkers.forEach(function(marker) {
+                    myMap.geoObjects.remove(marker);
+                });
+                coverageMarkers = [];
+                
+                showingCoverage = false;
+                document.getElementById('toggleCoverage').innerHTML = 'Show Panorama Coverage';
+            } else {
+                var bounds = myMap.getBounds();
+                var step = 0.001; // Reasonable step size
+                var latMin = bounds[0][0], latMax = bounds[1][0];
+                var lonMin = bounds[0][1], lonMax = bounds[1][1];
+                
+                // Create a key for this map region
+                var regionKey = bounds.toString();
+                
+                // Check if we have cached data for this region
+                if (cachedPanoramaPoints[regionKey]) {
+                    displayCachedPanoramaPoints(cachedPanoramaPoints[regionKey]);
+                    return;
+                }
+                
+                // Show loading message
+                var loadingMsg = document.createElement('div');
+                loadingMsg.style.position = 'absolute';
+                loadingMsg.style.top = '50%';
+                loadingMsg.style.left = '50%';
+                loadingMsg.style.transform = 'translate(-50%, -50%)';
+                loadingMsg.style.background = 'white';
+                loadingMsg.style.padding = '10px';
+                loadingMsg.style.borderRadius = '5px';
+                loadingMsg.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                loadingMsg.style.zIndex = '2000';
+                loadingMsg.textContent = 'Scanning for panoramas...';
+                document.body.appendChild(loadingMsg);
+
+                // Store found points for current region
+                var foundPoints = [];
+                var promises = [];
+                
+                for (var lat = latMin; lat <= latMax; lat += step) {
+                    for (var lon = lonMin; lon <= lonMax; lon += step) {
+                        (function(lat, lon) {
+                            var p = ymaps.panorama.locate([lat, lon]).then(function(panos) {
+                                if (panos.length > 0) {
+                                    var point = [lat, lon];
+                                    foundPoints.push(point);
+                                    addPanoramaPoint(point);
+                                }
+                            }).catch(function(error) {
+                                // Handle error silently
+                            });
+                            promises.push(p);
+                        })(lat, lon);
+                    }
+                }
+                
+                Promise.all(promises).then(function() {
+                    // Save to cache
+                    if (foundPoints.length > 0) {
+                        cachedPanoramaPoints[regionKey] = foundPoints;
+                    }
+                    
+                    // Remove loading message
+                    document.body.removeChild(loadingMsg);
+                    showingCoverage = true;
+                    document.getElementById('toggleCoverage').innerHTML = 'Hide Panorama Coverage';
+                });
+            }
+        }
+        
+        function addPanoramaPoint(point) {
+            // Use very small dots (just 2px radius) with high transparency
+            var marker = new ymaps.Circle([point, 2], {}, {
+                fillColor: "#0077ff66",
+                strokeColor: "#0077ff",
+                strokeOpacity: 0.4,
+                strokeWidth: 1,
+                zIndex: 100
+            });
+            myMap.geoObjects.add(marker);
+            coverageMarkers.push(marker);
+        }
+        
+        function displayCachedPanoramaPoints(points) {
+            points.forEach(function(point) {
+                addPanoramaPoint(point);
+            });
+            showingCoverage = true;
+            document.getElementById('toggleCoverage').innerHTML = 'Hide Panorama Coverage';
+        }
+        
+        function savePanoramaCache() {
+            try {
+                localStorage.setItem('yandexPanoramaCache', JSON.stringify(cachedPanoramaPoints));
+                alert('Panorama coverage data saved successfully!');
+            } catch (e) {
+                alert('Failed to save panorama data: ' + e.message);
+            }
+        }
+        
+        function loadPanoramaCache() {
+            try {
+                var cached = localStorage.getItem('yandexPanoramaCache');
+                if (cached) {
+                    cachedPanoramaPoints = JSON.parse(cached);
+                    alert('Panorama coverage data loaded successfully!');
+                } else {
+                    alert('No cached panorama data found.');
+                }
+            } catch (e) {
+                alert('Failed to load panorama data: ' + e.message);
+            }
+        }
+        
+        function showNoPanoramaMessage() {
+            if (noPanoramaMessage) {
+                noPanoramaMessage.style.display = 'block';
+            }
+        }
+        
+        function hideNoPanoramaMessage() {
+            if (noPanoramaMessage) {
+                noPanoramaMessage.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>

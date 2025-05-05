@@ -177,38 +177,19 @@ export class StreetViewFinder {
             }
         });
     }
-}
 
-// Add type definitions for global objects
-declare global {
-    interface Window {
-        google?: {
-            maps?: {
-                StreetViewService?: any;
-                StreetViewStatus?: {
-                    OK: string;
-                };
-                StreetViewPreference?: {
-                    NEAREST: string;
-                };
-                LatLng?: any;
-            };
+    public static isWithinKakaoCoverage(position: LatLng): boolean {
+        // Approximate bounding box for South Korea and some surrounding areas
+        const bounds = {
+            north: 43.0,  // North Korea border
+            south: 33.0,  // South of Jeju Island
+            east: 132.0,  // East Sea
+            west: 124.0   // Yellow Sea
         };
-        kakao?: {
-            maps?: {
-                RoadviewClient?: any;
-                LatLng?: any;
-                Roadview?: any;
-                event?: {
-                    addListener: Function;
-                };
-            };
-        };
-        ymaps?: {
-            panorama?: {
-                locate: (point: number[]) => Promise<any[]>;
-                createPlayer: (container: HTMLElement | string, point: number[], options?: any) => Promise<any>;
-            };
-        };
-    }
+        
+        return position.lat >= bounds.south && 
+            position.lat <= bounds.north && 
+            position.lng >= bounds.west && 
+            position.lng <= bounds.east;
+}
 }

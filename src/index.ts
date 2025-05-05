@@ -34,6 +34,36 @@ let currentState = {
     isCoverageVisible: false
 };
 
+// Function to check if coordinates are within Kakao's supported area
+function isWithinKakaoCoverage(position: LatLng): boolean {
+    // Approximate bounding box for South Korea and some surrounding areas
+    const bounds = {
+        north: 43.0,  // North Korea border
+        south: 33.0,  // South of Jeju Island
+        east: 136.0,  // East Sea
+        west: 118.0   // Yellow Sea
+    };
+    
+    return position.lat >= bounds.south && 
+           position.lat <= bounds.north && 
+           position.lng >= bounds.west && 
+           position.lng <= bounds.east;
+}
+
+// Function to show a notification when falling back to a default location
+function showOutOfRangeNotification(originalPosition: LatLng, fallbackPosition: LatLng): void {
+    const statusElement = document.getElementById('sync-status');
+    if (statusElement) {
+        statusElement.textContent = `Position (${originalPosition.lat.toFixed(2)}, ${originalPosition.lng.toFixed(2)}) is outside Kakao Maps coverage. Falling back to Seoul.`;
+        statusElement.style.display = 'block';
+        statusElement.style.backgroundColor = 'rgba(255, 87, 34, 0.8)'; // Orange alert color
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+            statusElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Reset to default
+        }, 5000); // Show for 5 seconds
+    }
+}
+
 // Function to initialize a map provider with synchronized position
 /**
  * This function updates the handling of the isCoverageVisible state when switching providers.
@@ -72,11 +102,24 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
     
     try {
         // Translate the coordinates from current provider to new provider
-        const translatedPosition = CoordinateTranslator.translateCoordinates(
+        let translatedPosition = CoordinateTranslator.translateCoordinates(
             currentState.position,
             currentProviderType,
             providerType
         );
+        
+        // Check if the position is valid for Kakao Maps
+        if (providerType === 'kakao' && !isWithinKakaoCoverage(translatedPosition)) {
+            // Position is outside Kakao's coverage area, use default position (Seoul)
+            const defaultPosition = { lat: 37.5665, lng: 126.9780 }; // Seoul
+            
+            // Show notification to user
+            showOutOfRangeNotification(translatedPosition, defaultPosition);
+            
+            // Use the default position instead
+            translatedPosition = defaultPosition;
+            console.log('Position out of Kakao range, falling back to Seoul:', translatedPosition);
+        }
         
         // Find the nearest street view position in the new provider
         let streetViewPosition = translatedPosition;

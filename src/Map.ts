@@ -61,7 +61,7 @@ export class Map {
             
             // If coverage is being shown, update it
             if (this.isCoverageVisible) {
-                this.showCoverage(position);
+                this.provider.showCoverage(position);
             }
             
             this.updateLocationInfo(position);
@@ -81,7 +81,7 @@ export class Map {
             
             // If coverage is being shown, update it
             if (this.isCoverageVisible) {
-                this.showCoverage(position);
+                this.provider.showCoverage(position);
             }
             
             // Update location info
@@ -114,6 +114,14 @@ export class Map {
         this.provider.hideCoverage();
     }
     
+    public toggleCoverage(): void {
+        if (this.isCoverageVisible) {
+            this.hideCoverage();
+        } else {
+            this.showCoverage();
+        }
+    }
+    
     private updateLocationInfo(position: LatLng): void {
         const infoElement = document.getElementById('location-info');
         if (infoElement) {
@@ -134,6 +142,7 @@ export class Map {
         }
     }
 
+    // Methods to get the current state 
     public getCurrentState(): {
         position: LatLng;
         heading: number;
@@ -150,5 +159,23 @@ export class Map {
             mapTypeId: this.currentMapTypeId,
             isCoverageVisible: this.isCoverageVisible
         };
+    }
+
+    public addStateChangeListener(callback: (state: any) => void): void {
+        this.provider.onStreetViewChange((position: LatLng, heading: number, pitch: number) => {
+            this.currentPosition = position;
+            this.currentHeading = heading;
+            this.currentPitch = pitch;
+            
+            const state = {
+                position: this.currentPosition,
+                heading: this.currentHeading,
+                pitch: this.currentPitch,
+                zoom: this.currentZoom,
+                mapTypeId: this.currentMapTypeId
+            };
+            
+            callback(state);
+        });
     }
 }

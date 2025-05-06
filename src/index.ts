@@ -13,27 +13,11 @@ const mapOptions: MapOptions = {
     mapTypeId: 'roadmap'
 };
 
-const defaultStreetViewOptions: Record<string, StreetViewOptions> = {
-    google: {
-        position: { lat: 37.5665, lng: 126.9780 }, // Seoul
-        pov: {
-            heading: 0,
-            pitch: 0
-        }
-    },
-    kakao: {
-        position: { lat: 37.5665, lng: 126.9780 }, // Seoul
-        pov: {
-            heading: 0,
-            pitch: 0
-        }
-    },
-    yandex: {
-        position: { lat: 55.751244, lng: 37.618423 }, // Moscow
-        pov: {
-            heading: 0,
-            pitch: 0
-        }
+const streetViewOptions: StreetViewOptions = {
+    position: { lat: 37.5665, lng: 126.9780 },
+    pov: {
+        heading: 0,
+        pitch: 0
     }
 };
 

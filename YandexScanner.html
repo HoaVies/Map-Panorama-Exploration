@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Yandex Panorama Coverage Scanner</title>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US" type="text/javascript"></script>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 70%;
+        }
+        #controls {
+            padding: 15px;
+        }
+        .control-row {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .control-label {
+            width: 150px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 8px;
+            width: 150px;
+            margin-right: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            margin-right: 10px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #e0e0e0;
+            height: 20px;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        #progress-inner {
+            height: 100%;
+            width: 0%;
+            background-color: #4285f4;
+            transition: width 0.3s;
+        }
+        #panorama-points-list {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            margin-bottom: 10px;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 10px 16px;
+            transition: 0.3s;
+            color: black;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4285f4;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #4285f4;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .custom-checkbox {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+        .custom-checkbox input {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div id="controls">
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'ScanTab')">Scan</button>
+            <button class="tablinks" onclick="openTab(event, 'LoadTab')">Load/Save</button>
+            <button class="tablinks" onclick="openTab(event, 'SettingsTab')">Settings</button>
+        </div>
+        
+        <div id="ScanTab" class="tabcontent" style="display: block;">
+            <div class="control-row">
+                <span class="control-label">North Boundary:</span>
+                <input type="text" id="north" value="59.95">
+                
+                <span class="control-label">South Boundary:</span>
+                <input type="text" id="south" value="59.92">
+            </div>
+            <div class="control-row">
+                <span class="control-label">East Boundary:</span>
+                <input type="text" id="east" value="30.35">
+                
+                <span class="control-label">West Boundary:</span>
+                <input type="text" id="west" value="30.29">
+            </div>
+            <div class="control-row">
+                <span class="control-label">Grid Size (meters):</span>
+                <input type="number" id="gridSize" value="50" min="10">
+                
+                <span class="control-label">Request Delay (ms):</span>
+                <input type="number" id="delay" value="150" min="0">
+
+                <div class="custom-checkbox">
+                    <input type="checkbox" id="adaptiveGrid" checked>
+                    <label for="adaptiveGrid">Adaptive Grid</label>
+                </div>
+            </div>
+            <div class="control-row">
+                <button id="startBtn">Start Scanning</button>
+                <button id="stopBtn" disabled>Stop Scanning</button>
+                <button id="testBtn">Test Selected Area</button>
+                <button id="clearBtn">Clear Map</button>
+            </div>
+        </div>
+        
+        <div id="LoadTab" class="tabcontent">
+            <div class="control-row">
+                <button id="saveBtn">Save Coverage Data</button>
+                <button id="exportGeoJSONBtn">Export as GeoJSON</button>
+                <button id="exportCSVBtn">Export as CSV</button>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Load from file:</span>
+                <input type="file" id="fileInput" accept=".json,.geojson,.csv">
+                <button id="loadBtn">Load</button>
+            </div>
+            <div class="control-row">
+                <button id="loadLocalBtn">Load from LocalStorage</button>
+                <button id="clearLocalBtn">Clear LocalStorage</button>
+            </div>
+        </div>
+        
+        <div id="SettingsTab" class="tabcontent">
+            <div class="control-row">
+                <div class="custom-checkbox">
+                    <input type="checkbox" id="connectLines" checked>
+                    <label for="connectLines">Connect Nearby Points</label>
+                </div>
+                <div class="custom-checkbox">
+                    <input type="checkbox" id="showMarkers" checked>
+                    <label for="showMarkers">Show Point Markers</label>
+                </div>
+                <div class="custom-checkbox">
+                    <input type="checkbox" id="showRoadLabels" checked>
+                    <label for="showRoadLabels">Show Road Labels</label>
+                </div>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Point Color:</span>
+                <input type="color" id="pointColor" value="#4285f4">
+                
+                <span class="control-label">Line Color:</span>
+                <input type="color" id="lineColor" value="#4285f4">
+                
+                <span class="control-label">Line Width:</span>
+                <input type="number" id="lineWidth" value="2.5" min="0.5" max="10" step="0.5">
+            </div>
+            <div class="control-row">
+                <span class="control-label">Line Opacity:</span>
+                <input type="range" id="lineOpacity" min="0.1" max="1" value="0.7" step="0.1">
+                
+                <span class="control-label">Connection Distance (m):</span>
+                <input type="number" id="connectionDistance" value="30" min="5" max="100">
+            </div>
+        </div>
+        
+        <div id="status">Status: Ready to scan</div>
+        <div class="progress-bar">
+            <div id="progress-inner"></div>
+        </div>
+        
+        <div id="panorama-points-list"></div>
+    </div>
+
+    <script>
+        // Global variables
+        let myMap;
+        let isScanning = false;
+        let scanGrid = [];
+        let currentIndex = 0;
+        let foundPanoramas = [];
+        let coverageMarkers = [];
+        let testMarker = null;
+        let abortController = null;
+        
+        // Cache state
+        let cachedAreas = {};
+        
+        // Initialize map
+        ymaps.ready(function() {
+            initMap();
+            setupEventHandlers();
+            loadLocalStorageData();
+        });
+        
+        function initMap() {
+            try {
+                // Create map centered on Saint Petersburg (known to have good panorama coverage)
+                myMap = new ymaps.Map('map', {
+                    center: [59.939, 30.315], // Saint Petersburg
+                    zoom: 14,
+                    controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+                });
+                
+                // Add selection tool
+                let selectingArea = false;
+                let startPoint, endPoint;
+                let selectRectangle = null;
+                
+                // Allow map click to test panorama
+                myMap.events.add('click', function(e) {
+                    if (!selectingArea) {
+                        var coords = e.get('coords');
+                        testPanoramaAt(coords);
+                    }
+                });
+                
+                updateStatus("Map initialized. Ready to scan.");
+            } catch (error) {
+                updateStatus("Error initializing map: " + error.message);
+            }
+        }
+        
+        function setupEventHandlers() {
+            document.getElementById('startBtn').addEventListener('click', startScanning);
+            document.getElementById('stopBtn').addEventListener('click', stopScanning);
+            document.getElementById('testBtn').addEventListener('click', testSelectedArea);
+            document.getElementById('clearBtn').addEventListener('click', clearMap);
+            document.getElementById('saveBtn').addEventListener('click', saveToLocalStorage);
+            document.getElementById('exportGeoJSONBtn').addEventListener('click', exportGeoJSON);
+            document.getElementById('exportCSVBtn').addEventListener('click', exportCSV);
+            document.getElementById('loadBtn').addEventListener('click', loadFromFile);
+            document.getElementById('loadLocalBtn').addEventListener('click', loadFromLocalStorage);
+            document.getElementById('clearLocalBtn').addEventListener('click', clearLocalStorage);
+            
+            // Settings changes
+            document.getElementById('pointColor').addEventListener('change', updateVisualization);
+            document.getElementById('lineColor').addEventListener('change', updateVisualization);
+            document.getElementById('lineWidth').addEventListener('change', updateVisualization);
+            document.getElementById('lineOpacity').addEventListener('change', updateVisualization);
+            document.getElementById('connectLines').addEventListener('change', updateVisualization);
+            document.getElementById('showMarkers').addEventListener('change', updateVisualization);
+            
+            // Update rectangle when inputs change
+            ['north', 'south', 'east', 'west'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateRectangle);
+            });
+            
+            updateRectangle();
+        }
+        
+        // Tab handling
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        // Create and update the rectangle showing scan area
+        function updateRectangle() {
+            try {
+                // Remove previous rectangle if it exists
+                myMap.geoObjects.each(function(obj) {
+                    if (obj.options && obj.options.get('name') === 'scanArea') {
+                        myMap.geoObjects.remove(obj);
+                    }
+                });
+                
+                // Get boundary values
+                var north = parseFloat(document.getElementById('north').value);
+                var south = parseFloat(document.getElementById('south').value);
+                var east = parseFloat(document.getElementById('east').value);
+                var west = parseFloat(document.getElementById('west').value);
+                
+                if (isNaN(north) || isNaN(south) || isNaN(east) || isNaN(west)) {
+                    return;
+                }
+                
+                // Create rectangle
+                var rectangle = new ymaps.Rectangle([
+                    [south, west],
+                    [north, east]
+                ], {}, {
+                    fillOpacity: 0.1,
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2,
+                    name: 'scanArea'
+                });
+                
+                myMap.geoObjects.add(rectangle);
+                myMap.setBounds(rectangle.geometry.getBounds(), {
+                    checkZoomRange: true
+                });
+            } catch (error) {
+                console.error("Error updating rectangle:", error);
+            }
+        }
+        
+        // Create adaptive grid of points to scan
+        function createScanGrid() {
+            var north = parseFloat(document.getElementById('north').value);
+            var south = parseFloat(document.getElementById('south').value);
+            var east = parseFloat(document.getElementById('east').value);
+            var west = parseFloat(document.getElementById('west').value);
+            var gridSize = parseInt(document.getElementById('gridSize').value);
+            var useAdaptiveGrid = document.getElementById('adaptiveGrid').checked;
+            
+            // Calculate area dimensions in meters
+            var avgLat = (north + south) / 2;
+            var metersPerDegreeLat = 111320; // approx meters per degree latitude
+            var metersPerDegreeLon = 111320 * Math.cos(avgLat * Math.PI / 180);
+            
+            var latStep = gridSize / metersPerDegreeLat;
+            var lonStep = gridSize / metersPerDegreeLon;
+            
+            var grid = [];
+            
+            if (useAdaptiveGrid) {
+                // Start with a coarse grid and then refine areas with panoramas
+                var coarseGridSize = gridSize * 4;
+                var coarseLatStep = coarseGridSize / metersPerDegreeLat;
+                var coarseLonStep = coarseGridSize / metersPerDegreeLon;
+                
+                // First pass - coarse grid
+                for (var lat = south; lat <= north; lat += coarseLatStep) {
+                    for (var lon = west; lon <= east; lon += coarseLonStep) {
+                        grid.push({
+                            coordinates: [lat, lon],
+                            level: 'coarse'
+                        });
+                    }
+                }
+            } else {
+                // Regular grid
+                for (var lat = south; lat <= north; lat += latStep) {
+                    for (var lon = west; lon <= east; lon += lonStep) {
+                        grid.push({
+                            coordinates: [lat, lon],
+                            level: 'fine'
+                        });
+                    }
+                }
+            }
+            
+            updateStatus("Created grid with " + grid.length + " points.");
+            return grid;
+        }
+        
+        // Refine the grid around areas where panoramas are found
+        function refineGridAroundPoint(point, existingGrid, gridSize) {
+            var avgLat = point[0];
+            var metersPerDegreeLat = 111320;
+            var metersPerDegreeLon = 111320 * Math.cos(avgLat * Math.PI / 180);
+            
+            var latStep = gridSize / metersPerDegreeLat;
+            var lonStep = gridSize / metersPerDegreeLon;
+            
+            var refinedPoints = [];
+            var centerLat = point[0];
+            var centerLon = point[1];
+            
+            // Create a fine grid around the point where a panorama was found
+            for (var lat = centerLat - latStep * 2; lat <= centerLat + latStep * 2; lat += latStep) {
+                for (var lon = centerLon - lonStep * 2; lon <= centerLon + lonStep * 2; lon += lonStep) {
+                    // Skip the center point as we already processed it
+                    if (lat === centerLat && lon === centerLon) continue;
+                    
+                    // Check if point is already in the grid
+                    var existingPoint = existingGrid.find(p => 
+                        Math.abs(p.coordinates[0] - lat) < latStep / 2 && 
+                        Math.abs(p.coordinates[1] - lon) < lonStep / 2
+                    );
+                    
+                    if (!existingPoint) {
+                        refinedPoints.push({
+                            coordinates: [lat, lon],
+                            level: 'fine'
+                        });
+                    }
+                }
+            }
+            
+            return refinedPoints;
+        }
+        
+        // Start scanning process
+        function startScanning() {
+            if (isScanning) return;
+            
+            isScanning = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('testBtn').disabled = true;
+            
+            // Clear previous results if user wants to
+            if (foundPanoramas.length > 0) {
+                if (!confirm("Do you want to keep previously found panoramas? Click OK to keep, Cancel to clear.")) {
+                    foundPanoramas = [];
+                    clearMap();
+                    document.getElementById('panorama-points-list').innerHTML = '';
+                }
+            }
+            
+            // Get boundary values for caching
+            const north = parseFloat(document.getElementById('north').value);
+            const south = parseFloat(document.getElementById('south').value);
+            const east = parseFloat(document.getElementById('east').value);
+            const west = parseFloat(document.getElementById('west').value);
+            
+            // Check if we have this area cached
+            const cacheKey = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`;
+            if (cachedAreas[cacheKey]) {
+                if (confirm("Cached data exists for this area. Would you like to use it instead of scanning again?")) {
+                    foundPanoramas = [...cachedAreas[cacheKey]];
+                    visualizePanoramas();
+                    finishScanning();
+                    return;
+                }
+            }
+            
+            // Create the grid
+            scanGrid = createScanGrid();
+            currentIndex = 0;
+            
+            // Create abort controller
+            abortController = new AbortController();
+            
+            // Start processing
+            processNextBatch();
+        }
+        
+        // Process points in batches to avoid freezing UI
+        async function processNextBatch() {
+            if (!isScanning || currentIndex >= scanGrid.length) {
+                if (isScanning) {
+                    finishScanning();
+                }
+                return;
+            }
+            
+            const batchSize = 10; // Process 10 points at a time
+            const delay = parseInt(document.getElementById('delay').value) || 150;
+            const endIndex = Math.min(currentIndex + batchSize, scanGrid.length);
+            const useAdaptiveGrid = document.getElementById('adaptiveGrid').checked;
+            
+            updateStatus(`Scanning points ${currentIndex+1} to ${endIndex} of ${scanGrid.length}...`);
+            updateProgress(currentIndex / scanGrid.length * 100);
+            
+            for (let i = currentIndex; i < endIndex && isScanning; i++) {
+                const pointData = scanGrid[i];
+                const point = pointData.coordinates;
+                const level = pointData.level;
+                
+                // Process point and get result
+                const panoramaFound = await processPoint(point, i);
+                
+                // If using adaptive grid and we found a panorama on the coarse grid, add refined points
+                if (useAdaptiveGrid && panoramaFound && level === 'coarse') {
+                    const gridSize = parseInt(document.getElementById('gridSize').value);
+                    const refinedPoints = refineGridAroundPoint(point, scanGrid, gridSize);
+                    
+                    // Add refined points to the end of the grid
+                    scanGrid = [...scanGrid, ...refinedPoints];
+                    
+                    updateStatus(`Found panorama at coarse point. Added ${refinedPoints.length} refined points. Grid now has ${scanGrid.length} points.`);
+                }
+                
+                await sleep(delay); // Add delay to avoid rate limiting
+            }
+            
+            currentIndex = endIndex;
+            
+            // Continue with next batch
+            setTimeout(processNextBatch, 0);
+        }
+        
+        // Process a single point
+        async function processPoint(point, index) {
+            try {
+                // First check if this point is very close to an already found panorama
+                // If so, skip it to avoid duplicate processing
+                const minDistanceThreshold = 0.00005; // Approximately 5 meters
+                const isNearExisting = foundPanoramas.some(p => {
+                    const distance = calculateDistance(point, p.coordinates);
+                    return distance < minDistanceThreshold;
+                });
+                
+                if (isNearExisting) {
+                    return false; // Skip this point, no panorama to process
+                }
+                
+                // Locate panorama at this point
+                const panoramas = await locatePanorama(point);
+                
+                if (panoramas && panoramas.length > 0) {
+                    // We found a panorama!
+                    const panoramaData = panoramas[0];
+                    
+                    // Extract position and ID safely
+                    let panoramaPoint, panoramaId;
+                    
+                    // Determine how to get position - API might return different structures
+                    try {
+                        if (typeof panoramaData.getPosition === 'function') {
+                            panoramaPoint = panoramaData.getPosition();
+                        } else if (panoramaData.position) {
+                            panoramaPoint = panoramaData.position;
+                        } else if (panoramaData.coords) {
+                            panoramaPoint = [panoramaData.coords.lat || 0, panoramaData.coords.lon || 0];
+                        } else {
+                            // Use the original point if we can't determine the panorama position
+                            panoramaPoint = point;
+                        }
+                    } catch (e) {
+                        panoramaPoint = point;
+                    }
+                    
+                    // Determine how to get ID
+                    try {
+                        if (typeof panoramaData.getPanoramaId === 'function') {
+                            panoramaId = panoramaData.getPanoramaId();
+                        } else if (panoramaData.id) {
+                            panoramaId = panoramaData.id;
+                        } else if (panoramaData._id) {
+                            panoramaId = panoramaData._id;
+                        } else {
+                            // Generate a fake ID if we can't get one
+                            panoramaId = 'pano_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+                        }
+                    } catch (e) {
+                        panoramaId = 'pano_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+                    }
+                    
+                    // Add to found panoramas list, avoiding duplicates
+                    const isDuplicate = foundPanoramas.some(p => 
+                        calculateDistance(panoramaPoint, p.coordinates) < 0.00002
+                    );
+                    
+                    if (!isDuplicate) {
+                        const newPanorama = {
+                            coordinates: panoramaPoint,
+                            id: panoramaId,
+                            timestamp: Date.now()
+                        };
+                        
+                        foundPanoramas.push(newPanorama);
+                        
+                        // Add marker on map
+                        addPanoramaMarker(panoramaPoint);
+                        
+                        // Update display
+                        updatePanoramasList();
+                    }
+                    
+                    return true; // Panorama found
+                }
+            } catch (error) {
+                console.log(`Error checking point ${index}:`, error);
+            }
+            
+            return false; // No panorama found
+        }
+        
+        // Locate panorama with proper error handling
+        function locatePanorama(point) {
+            return new Promise((resolve, reject) => {
+                try {
+                    ymaps.panorama.locate(point, { layer: 'yandex#panorama' })
+                        .then(panoramas => resolve(panoramas))
+                        .catch(error => resolve([])); // Resolve with empty array on error
+                } catch (error) {
+                    resolve([]); // Also resolve with empty array on exception
+                }
+            });
+        }
+        
+        // Stop scanning
+        function stopScanning() {
+            isScanning = false;
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            
+            updateStatus("Scanning stopped. Found " + foundPanoramas.length + " panoramas.");
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('testBtn').disabled = false;
+            
+            // Cache the results for this area
+            cacheCurrentResults();
+        }
+        
+        // Finish scanning
+        function finishScanning() {
+            isScanning = false;
+            updateProgress(100);
+            updateStatus("Scan complete! Found " + foundPanoramas.length + " panoramas.");
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('testBtn').disabled = false;
+            
+            // Cache the results for this area
+            cacheCurrentResults();
+        }
+        
+        // Cache the results for the current area
+        function cacheCurrentResults() {
+            if (foundPanoramas.length === 0) return;
+            
+            const north = parseFloat(document.getElementById('north').value);
+            const south = parseFloat(document.getElementById('south').value);
+            const east = parseFloat(document.getElementById('east').value);
+            const west = parseFloat(document.getElementById('west').value);
+            
+            const cacheKey = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`;
+            cachedAreas[cacheKey] = [...foundPanoramas];
+            
+            // Automatically save to localStorage
+            saveToLocalStorage();
+        }
+        
+        // Save current panorama data to localStorage
+        function saveToLocalStorage() {
+            try {
+                // Save both the panoramas and cached areas
+                const dataToSave = {
+                    panoramas: foundPanoramas,
+                    cachedAreas: cachedAreas,
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                localStorage.setItem('yandexPanoramaData', JSON.stringify(dataToSave));
+                
+                updateStatus(`Saved ${foundPanoramas.length} panoramas to local storage. ${Object.keys(cachedAreas).length} cached areas saved.`);
+            } catch (e) {
+                updateStatus(`Error saving to localStorage: ${e.message}`);
+            }
+        }
+        
+        // Load panorama data from localStorage
+        function loadFromLocalStorage() {
+            try {
+                const savedData = localStorage.getItem('yandexPanoramaData');
+                
+                if (!savedData) {
+                    updateStatus("No saved data found in local storage.");
+                    return;
+                }
+                
+                const parsedData = JSON.parse(savedData);
+                
+                if (parsedData.panoramas && parsedData.panoramas.length > 0) {
+                    // Ask if user wants to append or replace
+                    if (foundPanoramas.length > 0) {
+                        if (!confirm("Do you want to append the loaded data to existing panoramas? Click OK to append, Cancel to replace.")) {
+                            foundPanoramas = [];
+                            clearMap();
+                        }
+                    }
+                    
+                    // Add panoramas, avoiding duplicates
+                    parsedData.panoramas.forEach(pano => {
+                        const isDuplicate = foundPanoramas.some(p => 
+                            calculateDistance(pano.coordinates, p.coordinates) < 0.00002
+                        );
+                        
+                        if (!isDuplicate) {
+                            foundPanoramas.push(pano);
+                        }
+                    });
+                    
+                    // Update cached areas
+                    if (parsedData.cachedAreas) {
+                        cachedAreas = { ...cachedAreas, ...parsedData.cachedAreas };
+                    }
+                    
+                    // Visualize the panoramas
+                    visualizePanoramas();
+                    
+                    updateStatus(`Loaded ${parsedData.panoramas.length} panoramas from local storage. Last updated: ${new Date(parsedData.lastUpdated).toLocaleString()}`);
+                } else {
+                    updateStatus("No panorama data found in local storage.");
+                }
+            } catch (e) {
+                updateStatus(`Error loading from localStorage: ${e.message}`);
+            }
+        }
+        
+        // Load initial data from localStorage if available
+        function loadLocalStorageData() {
+            try {
+                const savedData = localStorage.getItem('yandexPanoramaData');
+                
+                if (!savedData) return;
+                
+                const parsedData = JSON.parse(savedData);
+                
+                if (parsedData.cachedAreas) {
+                    cachedAreas = parsedData.cachedAreas;
+                    updateStatus(`Loaded ${Object.keys(cachedAreas).length} cached areas from storage.`);
+                }
+            } catch (e) {
+                console.error("Error loading initial data from localStorage:", e);
+            }
+        }
+        
+        // Clear localStorage data
+        function clearLocalStorage() {
+            if (confirm("Are you sure you want to clear all saved panorama data from local storage?")) {
+                localStorage.removeItem('yandexPanoramaData');
+                cachedAreas = {};
+                updateStatus("Local storage panorama data cleared.");
+            }
+        }
+        
+        // Load from uploaded file
+        function loadFromFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                updateStatus("No file selected.");
+                return;
+            }
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const fileContent = e.target.result;
+                    let loadedPanoramas = [];
+                    
+                    // Determine file type and parse accordingly
+                    if (file.name.endsWith('.json') || file.name.endsWith('.geojson')) {
+                        // Parse JSON or GeoJSON
+                        const jsonData = JSON.parse(fileContent);
+                        
+                        if (jsonData.type === 'FeatureCollection') {
+                            // It's a GeoJSON file
+                            jsonData.features.forEach(feature => {
+                                if (feature.geometry && feature.geometry.type === 'Point') {
+                                    const coords = feature.geometry.coordinates;
+                                    // GeoJSON is [lon, lat], we need [lat, lon]
+                                    loadedPanoramas.push({
+                                        coordinates: [coords[1], coords[0]],
+                                        id: feature.properties?.id || `pano_${Date.now()}_${Math.round(Math.random() * 10000)}`,
+                                        timestamp: Date.now()
+                                    });
+                                }
+                            });
+                        } else if (Array.isArray(jsonData)) {
+                            // It's a simple array of panorama points
+                            loadedPanoramas = jsonData.map(point => ({
+                                coordinates: point.coordinates || [point.lat || 0, point.lng || 0],
+                                id: point.id || `pano_${Date.now()}_${Math.round(Math.random() * 10000)}`,
+                                timestamp: Date.now()
+                            }));
+                        } else if (jsonData.panoramas) {
+                            // It's our custom format
+                            loadedPanoramas = jsonData.panoramas;
+                            
+                            // Also load cached areas if available
+                            if (jsonData.cachedAreas) {
+                                cachedAreas = { ...cachedAreas, ...jsonData.cachedAreas };
+                            }
+                        }
+                    } else if (file.name.endsWith('.csv')) {
+                        // Parse CSV
+                        const lines = fileContent.split('\n');
+                        const headers = lines[0].split(',');
+                        
+                        // Figure out which columns contain the coordinates
+                        let latIndex = headers.findIndex(h => h.toLowerCase().includes('lat'));
+                        let lngIndex = headers.findIndex(h => h.toLowerCase().includes('lng') || h.toLowerCase().includes('lon'));
+                        let idIndex = headers.findIndex(h => h.toLowerCase().includes('id'));
+                        
+                        if (latIndex === -1 || lngIndex === -1) {
+                            throw new Error("Could not identify latitude and longitude columns in CSV");
+                        }
+                        
+                        // Parse each line
+                        for (let i = 1; i < lines.length; i++) {
+                            if (!lines[i].trim()) continue;
+                            
+                            const values = lines[i].split(',');
+                            const lat = parseFloat(values[latIndex]);
+                            const lng = parseFloat(values[lngIndex]);
+                            const id = idIndex !== -1 ? values[idIndex] : `pano_${Date.now()}_${i}`;
+                            
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                                loadedPanoramas.push({
+                                    coordinates: [lat, lng],
+                                    id: id,
+                                    timestamp: Date.now()
+                                });
+                            }
+                        }
+                    }
+                    
+                    if (loadedPanoramas.length > 0) {
+                        // Ask if user wants to append or replace
+                        if (foundPanoramas.length > 0) {
+                            if (!confirm("Do you want to append the loaded data to existing panoramas? Click OK to append, Cancel to replace.")) {
+                                foundPanoramas = [];
+                                clearMap();
+                            }
+                        }
+                        
+                        // Add panoramas, avoiding duplicates
+                        loadedPanoramas.forEach(pano => {
+                            const isDuplicate = foundPanoramas.some(p => 
+                                calculateDistance(pano.coordinates, p.coordinates) < 0.00002
+                            );
+                            
+                            if (!isDuplicate) {
+                                foundPanoramas.push(pano);
+                            }
+                        });
+                        
+                        // Visualize the panoramas
+                        visualizePanoramas();
+                        
+                        updateStatus(`Loaded ${loadedPanoramas.length} panoramas from file.`);
+                    } else {
+                        updateStatus("No valid panorama data found in file.");
+                    }
+                } catch (e) {
+                    updateStatus(`Error loading file: ${e.message}`);
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Export data as GeoJSON
+        function exportGeoJSON() {
+            if (foundPanoramas.length === 0) {
+                alert('No panorama data to export!');
+                return;
+            }
+            
+            // Create GeoJSON
+            var geojson = {
+                type: 'FeatureCollection',
+                features: foundPanoramas.map(p => ({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [p.coordinates[1], p.coordinates[0]] // GeoJSON is [lon, lat]
+                    },
+                    properties: {
+                        id: p.id,
+                        timestamp: p.timestamp
+                    }
+                }))
+            };
+            
+            // Create download link
+            var dataStr = JSON.stringify(geojson);
+            var dataBlob = new Blob([dataStr], {type: 'application/json'});
+            var url = URL.createObjectURL(dataBlob);
+            var link = document.createElement('a');
+            link.download = 'yandex_panoramas_' + Date.now() + '.geojson';
+            link.href = url;
+            link.click();
+            
+            updateStatus(`Exported ${foundPanoramas.length} panoramas to GeoJSON file.`);
+        }
+        
+        // Export data as CSV
+        function exportCSV() {
+            if (foundPanoramas.length === 0) {
+                alert('No panorama data to export!');
+                return;
+            }
+            
+            // Create CSV content
+            let csv = 'latitude,longitude,id,timestamp\n';
+            
+            foundPanoramas.forEach(p => {
+                csv += `${p.coordinates[0]},${p.coordinates[1]},${p.id},${p.timestamp}\n`;
+            });
+            
+            // Create download link
+            var dataBlob = new Blob([csv], {type: 'text/csv'});
+            var url = URL.createObjectURL(dataBlob);
+            var link = document.createElement('a');
+            link.download = 'yandex_panoramas_' + Date.now() + '.csv';
+            link.href = url;
+            link.click();
+            
+            updateStatus(`Exported ${foundPanoramas.length} panoramas to CSV file.`);
+        }
+        
+        // Add marker for found panorama
+        function addPanoramaMarker(point) {
+            // Get current visualization settings
+            const pointColor = document.getElementById('pointColor').value;
+            const lineColor = document.getElementById('lineColor').value;
+            const lineWidth = parseFloat(document.getElementById('lineWidth').value);
+            const lineOpacity = parseFloat(document.getElementById('lineOpacity').value);
+            const connectLines = document.getElementById('connectLines').checked;
+            const showMarkers = document.getElementById('showMarkers').checked;
+            const connectionDistance = parseInt(document.getElementById('connectionDistance').value) / 100000; // Convert to degrees
+            
+            if (showMarkers) {
+                // Create visible marker using Circle geometry instead of Placemark
+                var circle = new ymaps.Circle([
+                    point,
+                    3 // radius in meters (small but visible)
+                ], {
+                    hintContent: 'Panorama available'
+                }, {
+                    fillColor: pointColor,
+                    fillOpacity: 0.5,
+                    strokeColor: pointColor,
+                    strokeOpacity: 0.8,
+                    strokeWidth: 1,
+                    zIndex: 1
+                });
+                
+                myMap.geoObjects.add(circle);
+                coverageMarkers.push(circle);
+                
+                // Debug - log to console to verify markers are being created
+                console.log(`Added marker at [${point[0]}, ${point[1]}]`);
+            }
+            
+            // Connect nearby points with lines if we have more than one point
+            if (connectLines && foundPanoramas.length > 1) {
+                // Find nearby panorama points to connect with lines
+                const currentPointIndex = foundPanoramas.length - 1;
+                const currentPoint = foundPanoramas[currentPointIndex].coordinates;
+                
+                // Look for nearby points among previous panorama points
+                for (let i = 0; i < currentPointIndex; i++) {
+                    const prevPoint = foundPanoramas[i].coordinates;
+                    const distance = calculateDistance(currentPoint, prevPoint);
+                    
+                    // If points are close enough, connect them with a line
+                    if (distance < connectionDistance) {
+                        const line = new ymaps.Polyline([
+                            currentPoint,
+                            prevPoint
+                        ], {}, {
+                            strokeColor: lineColor,
+                            strokeWidth: lineWidth,
+                            strokeOpacity: lineOpacity,
+                            zIndex: 0  // Draw below the points
+                        });
+                        
+                        myMap.geoObjects.add(line);
+                        coverageMarkers.push(line); // Add to markers array for cleanup
+                    }
+                }
+            }
+        }
+        
+        // Update visualization based on current settings
+        function updateVisualization() {
+            // First clear existing markers
+            clearMap();
+            
+            // Then recreate visualization
+            visualizePanoramas();
+        }
+        
+        // Visualize all panoramas
+        function visualizePanoramas() {
+            // Clear existing markers first
+            clearMap();
+            
+            // Add markers for all panoramas
+            foundPanoramas.forEach((pano, index) => {
+                addPanoramaMarker(pano.coordinates);
+            });
+            
+            // Update the panorama list display
+            updatePanoramasList(true); // true means update the whole list
+        }
+        
+        // Helper function to calculate distance between two points
+        function calculateDistance(point1, point2) {
+            // Simple Euclidean distance for nearby points
+            return Math.sqrt(
+                Math.pow(point1[0] - point2[0], 2) + 
+                Math.pow(point1[1] - point2[1], 2)
+            );
+        }
+        
+        // Update list of found panoramas
+        function updatePanoramasList(updateAll = false) {
+            var list = document.getElementById('panorama-points-list');
+            
+            if (foundPanoramas.length === 0) {
+                list.innerHTML = 'No panoramas found yet.';
+                return;
+            }
+            
+            if (updateAll) {
+                // Clear and rebuild the whole list
+                list.innerHTML = '';
+                
+                foundPanoramas.forEach((pano, index) => {
+                    var item = document.createElement('div');
+                    item.textContent = `${index+1}: [${pano.coordinates[0].toFixed(6)}, ${pano.coordinates[1].toFixed(6)}] - ID: ${String(pano.id).substring(0, 8)}...`;
+                    list.appendChild(item);
+                });
+            } else {
+                // Add just the latest panorama
+                var latest = foundPanoramas[foundPanoramas.length - 1];
+                
+                var item = document.createElement('div');
+                item.textContent = `${foundPanoramas.length}: [${latest.coordinates[0].toFixed(6)}, ${latest.coordinates[1].toFixed(6)}] - ID: ${String(latest.id).substring(0, 8)}...`;
+                list.appendChild(item);
+            }
+            
+            // Scroll to bottom
+            list.scrollTop = list.scrollHeight;
+        }
+        
+        // Test panorama at current map center
+        function testSelectedArea() {
+            var north = parseFloat(document.getElementById('north').value);
+            var south = parseFloat(document.getElementById('south').value);
+            var east = parseFloat(document.getElementById('east').value);
+            var west = parseFloat(document.getElementById('west').value);
+            
+            if (isNaN(north) || isNaN(south) || isNaN(east) || isNaN(west)) {
+                updateStatus("Invalid boundary values");
+                return;
+            }
+            
+            // Check if we have this area cached
+            const cacheKey = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`;
+            if (cachedAreas[cacheKey]) {
+                updateStatus(`Found ${cachedAreas[cacheKey].length} panoramas in this area from cache.`);
+                return;
+            }
+            
+            // Test center of selection
+            const centerLat = (north + south) / 2;
+            const centerLng = (east + west) / 2;
+            
+            testPanoramaAt([centerLat, centerLng]);
+        }
+        
+        // Test panorama at specific point
+        function testPanoramaAt(coords) {
+            // Remove existing test marker if any
+            if (testMarker) {
+                myMap.geoObjects.remove(testMarker);
+            }
+            
+            // Add new marker
+            testMarker = new ymaps.Placemark(coords, {
+                hintContent: 'Testing panorama...'
+            }, {
+                preset: 'islands#redDotIcon'
+            });
+            myMap.geoObjects.add(testMarker);
+            
+            // Try to get panorama
+            updateStatus("Testing panorama at " + coords.join(', ') + "...");
+            
+            ymaps.panorama.locate(coords).then(
+                function(panoramas) {
+                    if (panoramas.length > 0) {
+                        // Determine position
+                        let panoPosition;
+                        try {
+                            if (typeof panoramas[0].getPosition === 'function') {
+                                panoPosition = panoramas[0].getPosition();
+                            } else if (panoramas[0].position) {
+                                panoPosition = panoramas[0].position;
+                            } else if (panoramas[0].coords) {
+                                panoPosition = [panoramas[0].coords.lat || 0, panoramas[0].coords.lon || 0];
+                            } else {
+                                panoPosition = coords;
+                            }
+                        } catch (e) {
+                            panoPosition = coords;
+                        }
+                        
+                        // Determine ID
+                        let panoId;
+                        try {
+                            if (typeof panoramas[0].getPanoramaId === 'function') {
+                                panoId = panoramas[0].getPanoramaId();
+                            } else if (panoramas[0].id) {
+                                panoId = panoramas[0].id;
+                            } else if (panoramas[0]._id) {
+                                panoId = panoramas[0]._id;
+                            } else {
+                                panoId = "Unknown ID";
+                            }
+                        } catch (e) {
+                            panoId = "Unknown ID";
+                        }
+                        
+                        // Update marker tooltip with success
+                        testMarker.properties.set('hintContent', 'Panorama found!');
+                        testMarker.options.set('iconColor', '#00FF00');
+                        
+                        updateStatus(`✅ Panorama found at [${panoPosition[0].toFixed(6)}, ${panoPosition[1].toFixed(6)}], ID: ${panoId}`);
+                        
+                        // Add to found panoramas if not already there
+                        const isDuplicate = foundPanoramas.some(p => 
+                            calculateDistance(panoPosition, p.coordinates) < 0.00002
+                        );
+                        
+                        if (!isDuplicate) {
+                            foundPanoramas.push({
+                                coordinates: panoPosition,
+                                id: panoId,
+                                timestamp: Date.now()
+                            });
+                            
+                            // Add marker
+                            addPanoramaMarker(panoPosition);
+                            
+                            // Update list
+                            updatePanoramasList();
+                        }
+                    } else {
+                        testMarker.properties.set('hintContent', 'No panorama here');
+                        testMarker.options.set('iconColor', '#FF0000');
+                        updateStatus("❌ No panorama found at this location.");
+                    }
+                },
+                function(error) {
+                    testMarker.properties.set('hintContent', 'Error: ' + error.message);
+                    testMarker.options.set('iconColor', '#FF0000');
+                    updateStatus("❌ Error checking panorama: " + error.message);
+                }
+            );
+        }
+        
+        // Clear all markers from map
+        function clearMap() {
+            // Remove all markers except the test marker
+            coverageMarkers.forEach(function(marker) {
+                myMap.geoObjects.remove(marker);
+            });
+            coverageMarkers = [];
+        }
+        
+        // Update status text
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+            console.log(text);
+        }
+        
+        // Update progress bar
+        function updateProgress(percent) {
+            document.getElementById('progress-inner').style.width = percent + '%';
+        }
+        
+        // Sleep function for delays
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // Function to integrate with the YandexMapsProvider
+        function integrateWithProvider(coverageData) {
+            
+            // Example implementation:
+            // 1. Parse coverage data
+            // 2. Create visualization layer in provider
+            // 3. Connect to provider's events
+            
+            console.log("Integrating coverage data with YandexMapsProvider");
+            
+            // Return the integration object
+            return {
+                // Methods to interact with the coverage data
+                showCoverage: function() {
+                    // Code to show coverage
+                },
+                hideCoverage: function() {
+                    // Code to hide coverage
+                },
+                getCoverageAt: function(position) {
+                    // Return coverage data for a specific position
+                }
+            };
+        }
+        
+        // Expose functions for external use
+        window.YandexPanoramaScanner = {
+            loadCoverageData: function(data) {
+                // Load coverage data from external code
+                if (data && Array.isArray(data)) {
+                    foundPanoramas = data;
+                    visualizePanoramas();
+                    return true;
+                }
+                return false;
+            },
+            exportCoverageData: function() {
+                // Return current coverage data for external use
+                return foundPanoramas;
+            },
+            integrateWithProvider: integrateWithProvider
+        };
+    </script>
+</body>
+</html>

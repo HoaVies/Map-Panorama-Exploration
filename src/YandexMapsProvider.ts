@@ -83,7 +83,7 @@ export class YandexMapsProvider implements IMapProvider {
                     this.panoramaManager = this.map.getPanoramaManager();
                     
                     // Setup custom panorama handling to prevent default behavior
-                    this.setupCustomPanoramaHandling();
+                    // this.setupCustomPanoramaHandling();
 
                     // Set up event listeners for the map
                     this.setupMapEventListeners();
@@ -94,115 +94,115 @@ export class YandexMapsProvider implements IMapProvider {
         });
     }
 
-    private setupCustomPanoramaHandling(): void {
-        if (!this.map || !this.panoramaManager) return;
+    // private setupCustomPanoramaHandling(): void {
+    //     if (!this.map || !this.panoramaManager) return;
         
-        // Directly replace the openPlayer method of the panorama manager
-        // This is a more reliable approach than trying to intercept events
-        const originalOpenPlayer = this.panoramaManager.openPlayer;
-        this.panoramaManager.openPlayer = (panorama: any, options: any) => {
-            console.log('Intercepted panorama manager openPlayer call');
+    //     // Directly replace the openPlayer method of the panorama manager
+    //     // This is a more reliable approach than trying to intercept events
+    //     const originalOpenPlayer = this.panoramaManager.openPlayer;
+    //     this.panoramaManager.openPlayer = (panorama: any, options: any) => {
+    //         console.log('Intercepted panorama manager openPlayer call');
             
-            if (this.isPreventingDefaultPanorama) {
-                // Instead of using default player, use our custom implementation
-                if (panorama) {
-                    // Get the current map center as the position
-                    const mapCenter = this.map?.getCenter();
-                    if (mapCenter) {
-                        const position = {
-                            lat: mapCenter[0],
-                            lng: mapCenter[1]
-                        };
+    //         if (this.isPreventingDefaultPanorama) {
+    //             // Instead of using default player, use our custom implementation
+    //             if (panorama) {
+    //                 // Get the current map center as the position
+    //                 const mapCenter = this.map?.getCenter();
+    //                 if (mapCenter) {
+    //                     const position = {
+    //                         lat: mapCenter[0],
+    //                         lng: mapCenter[1]
+    //                     };
                         
-                        // Update pegman
-                        this.setPegmanPosition(position);
-                        this.setPegmanVisible(true);
+    //                     // Update pegman
+    //                     this.setPegmanPosition(position);
+    //                     this.setPegmanVisible(true);
                         
-                        // Open panorama in our container
-                        const container = document.getElementById('street-view-container');
-                        if (container) {
-                            container.style.display = 'block';
+    //                     // Open panorama in our container
+    //                     const container = document.getElementById('street-view-container');
+    //                     if (container) {
+    //                         container.style.display = 'block';
                             
-                            if (this.panoramaPlayer) {
-                                this.panoramaPlayer.setPanorama(panorama);
-                            } else {
-                                // Create panorama player
-                                this.panoramaPlayer = new ymaps.panorama.Player(
-                                    container,
-                                    panorama,
-                                    {
-                                        direction: this.pendingHeading !== null && this.pendingPitch !== null ? 
-                                            [this.pendingHeading, this.pendingPitch] : 'auto',
-                                        controls: ['zoomControl', 'fullscreenControl']
-                                    }
-                                );
+    //                         if (this.panoramaPlayer) {
+    //                             this.panoramaPlayer.setPanorama(panorama);
+    //                         } else {
+    //                             // Create panorama player
+    //                             this.panoramaPlayer = new ymaps.panorama.Player(
+    //                                 container,
+    //                                 panorama,
+    //                                 {
+    //                                     direction: this.pendingHeading !== null && this.pendingPitch !== null ? 
+    //                                         [this.pendingHeading, this.pendingPitch] : 'auto',
+    //                                     controls: ['zoomControl', 'fullscreenControl']
+    //                                 }
+    //                             );
                                 
-                                // Set up panorama event listeners
-                                this.setupPanoramaEventListeners();
-                            }
+    //                             // Set up panorama event listeners
+    //                             this.setupPanoramaEventListeners();
+    //                         }
                             
-                            // Store current position
-                            if (panorama.getPosition) {
-                                try {
-                                    const panoPosition = panorama.getPosition();
-                                    if (panoPosition && panoPosition.length >= 2) {
-                                        this.currentPanoramaPosition = {
-                                            lat: panoPosition[0],
-                                            lng: panoPosition[1]
-                                        };
+    //                         // Store current position
+    //                         if (panorama.getPosition) {
+    //                             try {
+    //                                 const panoPosition = panorama.getPosition();
+    //                                 if (panoPosition && panoPosition.length >= 2) {
+    //                                     this.currentPanoramaPosition = {
+    //                                         lat: panoPosition[0],
+    //                                         lng: panoPosition[1]
+    //                                     };
                                         
-                                        // Update pegman to actual panorama position
-                                        this.setPegmanPosition(this.currentPanoramaPosition);
-                                    }
-                                } catch (e) {
-                                    console.warn('Error getting panorama position', e);
-                                }
-                            }
-                        }
-                    }
-                }
-                return Promise.resolve(); // Return a resolved promise
-            } else {
-                // Call original method when not preventing
-                return originalOpenPlayer.call(this.panoramaManager, panorama, options);
-            }
-        };
+    //                                     // Update pegman to actual panorama position
+    //                                     this.setPegmanPosition(this.currentPanoramaPosition);
+    //                                 }
+    //                             } catch (e) {
+    //                                 console.warn('Error getting panorama position', e);
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             return Promise.resolve(); // Return a resolved promise
+    //         } else {
+    //             // Call original method when not preventing
+    //             return originalOpenPlayer.call(this.panoramaManager, panorama, options);
+    //         }
+    //     };
         
-        // Also handle locate event to intercept the search for panoramas
-        this.map.events.add('click', (e: any) => {
-            if (this.isPreventingDefaultPanorama && this.coverageVisible) {
-                // Prevent default click behavior for panorama
-                e.preventDefault();
+    //     // Also handle locate event to intercept the search for panoramas
+    //     this.map.events.add('click', (e: any) => {
+    //         if (this.isPreventingDefaultPanorama && this.coverageVisible) {
+    //             // Prevent default click behavior for panorama
+    //             e.preventDefault();
                 
-                // Get click coordinates
-                const coords = e.get('coords');
-                if (!coords) return;
+    //             // Get click coordinates
+    //             const coords = e.get('coords');
+    //             if (!coords) return;
                 
-                // Create position object
-                const position = {
-                    lat: coords[0],
-                    lng: coords[1]
-                };
+    //             // Create position object
+    //             const position = {
+    //                 lat: coords[0],
+    //                 lng: coords[1]
+    //             };
                 
-                // Check if this is a panorama click
-                ymaps.panorama.locate(coords).then((panoramas: any) => {
-                    if (panoramas && panoramas.length > 0) {
-                        // Update pegman
-                        this.setPegmanPosition(position);
-                        this.setPegmanVisible(true);
+    //             // Check if this is a panorama click
+    //             ymaps.panorama.locate(coords).then((panoramas: any) => {
+    //                 if (panoramas && panoramas.length > 0) {
+    //                     // Update pegman
+    //                     this.setPegmanPosition(position);
+    //                     this.setPegmanVisible(true);
                         
-                        // Open panorama in our container
-                        this.setStreetViewPosition(position);
+    //                     // Open panorama in our container
+    //                     this.setStreetViewPosition(position);
                         
-                        // Call the registered click callback
-                        if (this.mapClickCallback) {
-                            this.mapClickCallback(position);
-                        }
-                    }
-                });
-            }
-        });
-    }
+    //                     // Call the registered click callback
+    //                     if (this.mapClickCallback) {
+    //                         this.mapClickCallback(position);
+    //                     }
+    //                 }
+    //             });
+    //         }
+    //     });
+    // }
 
     public setCenter(position: LatLng): void {
         if (!this.map) return;

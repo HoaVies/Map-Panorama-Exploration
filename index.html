@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map Viewer - Dual Provider</title>
+    <title>Map Viewer - Multi Provider</title>
     <style>
         html, body {
             height: 100%;
@@ -81,6 +81,8 @@
             cursor: crosshair;
         }
     </style>
+    <!-- Leaflet CSS for Mapy.cz -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 <body>
     <div class="provider-selector">
@@ -89,6 +91,7 @@
             <option value="google">Google Maps</option>
             <option value="kakao">Kakao Maps</option>
             <option value="yandex">Yandex Maps</option>
+            <option value="mapycz">Mapy.cz</option>
         </select>
     </div>
 
@@ -106,10 +109,21 @@
     <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=bb6dae98d7940acbb68719b7d0a00d14"></script>
     
     <!-- Load Yandex Maps API -->
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=0df690eb-a589-43c6-95a3-c6e506059ebc&lang=en_US" type="text/javascript"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US" type="text/javascript"></script>
+    
+    <!-- Load Leaflet for Mapy.cz -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    
+    <!-- Load Mapy.cz Panorama API with API key -->
+    <script>
+        // Initialize Mapy.cz API with the key
+        window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
+    </script>
+    <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
     
     <!-- Load our application -->
     <script type="module" src="dist/index.js"></script>
+    
     <script>
         // Add this to your main script to monitor scroll events
         document.addEventListener('DOMContentLoaded', function() {
@@ -155,6 +169,6 @@
                 }
             });
         });
-        </script>
+    </script>
 </body>
 </html>

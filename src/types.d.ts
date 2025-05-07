@@ -127,4 +127,16 @@ declare namespace google.maps {
     }
 
     type MapTypeId = 'roadmap' | 'satellite' | 'hybrid' | 'terrain';
+
+    // Type definitions for various global objects used in the project
+    interface Window {
+        // Mapy.cz API
+        Panorama: any;
+        // Leaflet
+        L: any;
+        // Other mapping APIs you're using
+        google: any;
+        kakao: any;
+        ymaps: any;
+    }
 }

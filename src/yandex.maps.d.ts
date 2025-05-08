@@ -28,22 +28,28 @@ declare namespace ymaps {
     events: EventManager;
     geoObjects: GeoObjectCollection;
     panorama?: panorama.Manager;
-    getPanoramaManager(): panorama.Manager;
-    controls: {
-      add(control: any, options?: {float?: string, floatIndex?: number}): void;
-      remove(control: any): void;
-      get(index: number): any;
-      getLength(): number;
-      getAll(): any[]; // Add the missing getAll method
-  };
-    container: { getElement(): HTMLElement }; 
+    options: {
+        get(key: string): any;
+        set(key: string, value: any): void;
+    };
+    container: { 
+        getElement(): HTMLElement;
+        getSize(): number[]; // Add this method
+    };
     converter: {
-      clientToGlobal(clientPixelPoint: number[]): number[];
-      globalToClient(globalPixelPoint: number[]): number[];
+        clientToGlobal(clientPixelPoint: number[]): number[];
+        globalToClient(globalPixelPoint: number[]): number[];
     };
     layers: {
-      add(layer: any): void;
-      remove(layer: any): void;
+        add(layer: any): void;
+        remove(layer: any): void;
+    };
+    controls: {
+        add(control: any, options?: {float?: string, floatIndex?: number}): void;
+        remove(control: any): void;
+        get(index: number): any;
+        getLength(): number;
+        getAll(): any[];
     };
 
     setCenter(center: number[], zoom?: number, options?: any): void;
@@ -54,10 +60,10 @@ declare namespace ymaps {
     getType(): string;
     destroy(): void;
     behaviors: any;
-    getPanoramaManager(): panorama.Manager;
+    getPanoramaManager(): Promise<panorama.Manager>;
     relayout(): void;
     getBounds(): number[][];
-  }
+}
   namespace event {
     function preventMap(): void;
   }

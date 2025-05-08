@@ -26,8 +26,6 @@ export class StreetViewFinder {
                 return await this.findKakaoStreetViewPosition(position, radius);
             case 'yandex':
                 return await this.findYandexStreetViewPosition(position);
-            case 'mapycz':
-                return await this.findMapyczPanoramaPosition(position, radius);
             default:
                 return position;
         }
@@ -193,39 +191,5 @@ export class StreetViewFinder {
             position.lat <= bounds.north && 
             position.lng >= bounds.west && 
             position.lng <= bounds.east;
-}
-/**
- * Find the nearest Mapy.cz Panorama position.
- */
-private static async findMapyczPanoramaPosition(position: LatLng, radius: number = 50): Promise<LatLng | null> {
-    return new Promise<LatLng | null>((resolve, reject) => {
-        // Check if Mapy.cz Panorama API is loaded - use type assertion
-        if (window.Panorama && (window.Panorama as any).panoramaExists) {
-            (window.Panorama as any).panoramaExists({
-                lon: position.lng,
-                lat: position.lat,
-                apiKey: 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A',
-                radius: radius
-            })
-            .then((result: any) => {
-                if (result.errorCode === 'NONE') {
-                    // Panorama exists at this location
-                    resolve(position);
-                } else {
-                    // No panorama found
-                    console.warn('No Mapy.cz panorama found:', result.error);
-                    resolve(null);
-                }
-            })
-            .catch((error: any) => {
-                console.error('Error checking Mapy.cz panorama:', error);
-                resolve(null);
-            });
-        } else {
-            // Mapy.cz API not available
-            console.warn('Mapy.cz Panorama API not available');
-            resolve(position);
-        }
-    });
 }
 }

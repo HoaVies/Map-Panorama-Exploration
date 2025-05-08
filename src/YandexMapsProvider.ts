@@ -9,63 +9,90 @@ export class YandexMapsProvider implements IMapProvider {
     private currentPanoramaPosition: LatLng | null = null;
     private panoramaManager: any = null;
     private coverageVisible: boolean = false;
-    private isPreventingDefaultPanorama: boolean = false;
+    private _originalOpenPlayer: any = null;
     
     // For POV management
     private pendingHeading: number | null = null;
     private pendingPitch: number | null = null;
     private pendingPovInterval: any = null;
-    private forceNextPov: boolean = false;
-
-    constructor() {
-        // Constructor doesn't need parameters as the API key is loaded in the HTML
+    private coverageToggleButton: HTMLButtonElement | null = null;
+    
+    private createCoverageToggleButton(): void {
+        if (!this.map) return;
+        
+        const mapContainer = this.map.container.getElement();
+        if (!mapContainer) return;
+        
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'yandex-map-controls';
+        controlsContainer.style.position = 'absolute';
+        controlsContainer.style.top = '10px';
+        controlsContainer.style.left = '10px';
+        controlsContainer.style.zIndex = '10000';
+        
+        mapContainer.appendChild(controlsContainer);
+        
+        this.coverageToggleButton = document.createElement('button');
+        this.coverageToggleButton.innerText = this.coverageVisible ? 
+            'Turn on coverage Map' : 'Turn on coverage Map';
+        this.coverageToggleButton.style.padding = '8px 12px';
+        this.coverageToggleButton.style.backgroundColor = '#4285f4';
+        this.coverageToggleButton.style.color = 'white';
+        this.coverageToggleButton.style.border = 'none';
+        this.coverageToggleButton.style.borderRadius = '4px';
+        this.coverageToggleButton.style.cursor = 'pointer';
+        this.coverageToggleButton.style.margin = '5px';
+        this.coverageToggleButton.style.fontSize = '14px';
+        
+        this.coverageToggleButton.onmouseover = () => {
+            if (this.coverageToggleButton) 
+                this.coverageToggleButton.style.backgroundColor = '#3367d6';
+        };
+        this.coverageToggleButton.onmouseout = () => {
+            if (this.coverageToggleButton) 
+                this.coverageToggleButton.style.backgroundColor = '#4285f4';
+        };
+        
+        this.coverageToggleButton.addEventListener('click', () => {
+            if (this.coverageVisible) {
+                this.hideCoverage();
+            } else {
+                this.showCoverage();
+            }
+        });
+        
+        controlsContainer.appendChild(this.coverageToggleButton);
     }
-
+    
     public initializeMap(containerId: string, options: MapOptions): void {
         ymaps.ready(() => {
             const container = document.getElementById(containerId);
             if (!container) {
                 throw new Error(`Container element with ID "${containerId}" not found`);
             }
-
-            // Ensure container has proper dimensions
+    
             container.style.width = '100%';
             container.style.height = '100%';
             container.style.minHeight = '300px';
-
+    
             const center = [options.center.lat, options.center.lng];
-            console.log("Initializing Yandex Map with center:", center);
-
-            // Use CORRECT Yandex map type format
+            
             let mapType: string;
             switch (options.mapTypeId) {
-                case 'roadmap':
-                    mapType = 'yandex#map';
-                    break;
-                case 'satellite':
-                    mapType = 'yandex#satellite';
-                    break;
-                case 'hybrid':
-                    mapType = 'yandex#hybrid';
-                    break;
-                default:
-                    mapType = 'yandex#map';
+                case 'satellite': mapType = 'yandex#satellite'; break;
+                case 'hybrid': mapType = 'yandex#hybrid'; break;
+                default: mapType = 'yandex#map';
             }
-
-            // Add short delay to ensure DOM is ready
+    
             setTimeout(() => {
                 try {
-                    // Initialize Yandex Map
                     this.map = new ymaps.Map(container, {
                         center: center,
                         zoom: options.zoom,
                         type: mapType,
-                        controls: ['zoomControl', 'fullscreenControl', 'typeSelector']
+                        controls: ['zoomControl', 'fullscreenControl', 'typeSelector'],
                     });
-
-                    console.log("Yandex Map created successfully");
-
-                    // Create pegman marker
+    
                     this.pegman = new ymaps.Placemark(center, {
                         hintContent: 'Pegman - Drag to view street panorama'
                     }, {
@@ -75,134 +102,166 @@ export class YandexMapsProvider implements IMapProvider {
                         iconImageOffset: [-16, -32],
                         draggable: true,
                     });
-
-                    // Add pegman to the map
+    
                     this.map.geoObjects.add(this.pegman);
-
-                    // Get panorama manager
-                    this.panoramaManager = this.map.getPanoramaManager();
-                    
-                    // Setup custom panorama handling to prevent default behavior
-                    // this.setupCustomPanoramaHandling();
-
-                    // Set up event listeners for the map
-                    this.setupMapEventListeners();
+    
+                    // Use the correct type for getPanoramaManager
+                    (this.map.getPanoramaManager() as unknown as Promise<any>).then((manager: any) => {
+                        this.panoramaManager = manager;
+                        this.createCoverageToggleButton();
+                        
+                        // Set up event handling for the panorama manager
+                        this.setupPanoramaManagerEvents();
+                        this.setupMapEventListeners();
+                        
+                        // Add the pegman event handlers
+                        this.setupPegmanEvents();
+                    }).catch((error: any) => {
+                        console.error("Error getting panorama manager:", error);
+                    });
                 } catch (error) {
                     console.error("Error creating Yandex map:", error);
                 }
-            }, 100); // Small delay to ensure DOM is ready
+            }, 100);
         });
     }
-
-    // private setupCustomPanoramaHandling(): void {
-    //     if (!this.map || !this.panoramaManager) return;
+    
+    private setupPanoramaManagerEvents(): void {
+        if (!this.panoramaManager) return;
         
-    //     // Directly replace the openPlayer method of the panorama manager
-    //     // This is a more reliable approach than trying to intercept events
-    //     const originalOpenPlayer = this.panoramaManager.openPlayer;
-    //     this.panoramaManager.openPlayer = (panorama: any, options: any) => {
-    //         console.log('Intercepted panorama manager openPlayer call');
+        // Store the original openPlayer method to use later
+        this._originalOpenPlayer = this.panoramaManager.openPlayer;
+        
+        // Replace the openPlayer method with our custom implementation
+        this.panoramaManager.openPlayer = (panorama: any, locateOptions?: any, options?: any) => {
+            // Only allow the default panorama player when coverage is not enabled
+            if (!this.coverageVisible) {
+                return this._originalOpenPlayer.call(this.panoramaManager, panorama, locateOptions, options);
+            }
             
-    //         if (this.isPreventingDefaultPanorama) {
-    //             // Instead of using default player, use our custom implementation
-    //             if (panorama) {
-    //                 // Get the current map center as the position
-    //                 const mapCenter = this.map?.getCenter();
-    //                 if (mapCenter) {
-    //                     const position = {
-    //                         lat: mapCenter[0],
-    //                         lng: mapCenter[1]
-    //                     };
+            // When coverage is enabled, we handle it 
+            console.log('Intercepted panorama open request');
+            
+            // Try to get coordinates from the panorama
+            if (panorama && typeof panorama.getPosition === 'function') {
+                try {
+                    const coords = panorama.getPosition();
+                    if (coords && coords.length >= 2) {
+                        const position = {
+                            lat: coords[0],
+                            lng: coords[1]
+                        };
                         
-    //                     // Update pegman
-    //                     this.setPegmanPosition(position);
-    //                     this.setPegmanVisible(true);
+                        // Move pegman to this position and show our custom panorama
+                        this.setPegmanPosition(position);
+                        this.setPegmanVisible(true);
+                        this.setStreetViewPosition(position);
                         
-    //                     // Open panorama in our container
-    //                     const container = document.getElementById('street-view-container');
-    //                     if (container) {
-    //                         container.style.display = 'block';
-                            
-    //                         if (this.panoramaPlayer) {
-    //                             this.panoramaPlayer.setPanorama(panorama);
-    //                         } else {
-    //                             // Create panorama player
-    //                             this.panoramaPlayer = new ymaps.panorama.Player(
-    //                                 container,
-    //                                 panorama,
-    //                                 {
-    //                                     direction: this.pendingHeading !== null && this.pendingPitch !== null ? 
-    //                                         [this.pendingHeading, this.pendingPitch] : 'auto',
-    //                                     controls: ['zoomControl', 'fullscreenControl']
-    //                                 }
-    //                             );
-                                
-    //                             // Set up panorama event listeners
-    //                             this.setupPanoramaEventListeners();
-    //                         }
-                            
-    //                         // Store current position
-    //                         if (panorama.getPosition) {
-    //                             try {
-    //                                 const panoPosition = panorama.getPosition();
-    //                                 if (panoPosition && panoPosition.length >= 2) {
-    //                                     this.currentPanoramaPosition = {
-    //                                         lat: panoPosition[0],
-    //                                         lng: panoPosition[1]
-    //                                     };
-                                        
-    //                                     // Update pegman to actual panorama position
-    //                                     this.setPegmanPosition(this.currentPanoramaPosition);
-    //                                 }
-    //                             } catch (e) {
-    //                                 console.warn('Error getting panorama position', e);
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             return Promise.resolve(); // Return a resolved promise
-    //         } else {
-    //             // Call original method when not preventing
-    //             return originalOpenPlayer.call(this.panoramaManager, panorama, options);
-    //         }
-    //     };
+                        // Call the map click callback if registered
+                        if (this.mapClickCallback) {
+                            this.mapClickCallback(position);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error getting panorama coordinates:', e);
+                }
+            }
+            
+            return Promise.resolve();
+        };
         
-    //     // Also handle locate event to intercept the search for panoramas
-    //     this.map.events.add('click', (e: any) => {
-    //         if (this.isPreventingDefaultPanorama && this.coverageVisible) {
-    //             // Prevent default click behavior for panorama
-    //             e.preventDefault();
+        // Listen for the locate event which occurs when searching for panoramas
+        this.panoramaManager.events.add('locate', (e: any) => {
+            if (!this.coverageVisible) return;
+            
+            console.log('Panorama locate event intercepted');
+            const point = e.get('point');
+            if (point && point.length >= 2) {
+                const position = {
+                    lat: point[0],
+                    lng: point[1]
+                };
                 
-    //             // Get click coordinates
-    //             const coords = e.get('coords');
-    //             if (!coords) return;
+                // Call our map click handler
+                if (this.mapClickCallback) {
+                    this.mapClickCallback(position);
+                }
                 
-    //             // Create position object
-    //             const position = {
-    //                 lat: coords[0],
-    //                 lng: coords[1]
-    //             };
+                e.preventDefault();
+            }
+        });
+    }
+    
+    private setupPegmanEvents(): void {
+        if (!this.pegman) return;
+        
+        // Add dragend event handler
+        this.pegman.events.add('dragend', () => {
+            if (!this.pegman) return;
+            
+            const coords = this.pegman.geometry.getCoordinates();
+            const position = {
+                lat: coords[0],
+                lng: coords[1]
+            };
+            
+            this.setStreetViewPosition(position);
+        });
+    }
+    
+    private setupMapEventListeners(): void {
+        if (!this.map) return;
+        
+        // Handle map clicks - specifically for coverage areas
+        this.map.events.add('click', (e: any) => {
+            // If coverage is enabled
+            if (this.coverageVisible) {
+                // Get click coordinates
+                const coords = e.get('coords');
+                const position = { lat: coords[0], lng: coords[1] };
                 
-    //             // Check if this is a panorama click
-    //             ymaps.panorama.locate(coords).then((panoramas: any) => {
-    //                 if (panoramas && panoramas.length > 0) {
-    //                     // Update pegman
-    //                     this.setPegmanPosition(position);
-    //                     this.setPegmanVisible(true);
+                // Check if there's a panorama at this position
+                ymaps.panorama.locate(coords).then((panoramas: any[]) => {
+                    if (panoramas && panoramas.length > 0) {
+                        // Move pegman to this location and update panorama
+                        this.setPegmanPosition(position);
+                        this.setPegmanVisible(true);
+                        this.setStreetViewPosition(position);
                         
-    //                     // Open panorama in our container
-    //                     this.setStreetViewPosition(position);
-                        
-    //                     // Call the registered click callback
-    //                     if (this.mapClickCallback) {
-    //                         this.mapClickCallback(position);
-    //                     }
-    //                 }
-    //             });
-    //         }
-    //     });
-    // }
+                        // Call map click callback if registered
+                        if (this.mapClickCallback) {
+                            this.mapClickCallback(position);
+                        }
+                    }
+                }).catch((error: any) => {
+                    console.error('Error checking for panorama at location:', error);
+                });
+                
+                // Prevent default handling of the click
+                e.preventDefault();
+                ymaps.event.preventMap();
+                return;
+            }
+            
+            // Handle shift+click to directly open street view
+            const originalEvent = e.get('domEvent').originalEvent;
+            if (originalEvent && originalEvent.shiftKey) {
+                const coords = e.get('coords');
+                const position = { lat: coords[0], lng: coords[1] };
+                
+                this.setPegmanPosition(position);
+                this.setPegmanVisible(true);
+                this.setStreetViewPosition(position);
+                return;
+            }
+            
+            // Forward regular clicks to the callback
+            if (this.mapClickCallback) {
+                const coords = e.get('coords');
+                this.mapClickCallback({ lat: coords[0], lng: coords[1] });
+            }
+        });
+    }
 
     public setCenter(position: LatLng): void {
         if (!this.map) return;
@@ -211,26 +270,17 @@ export class YandexMapsProvider implements IMapProvider {
 
     public setZoom(zoom: number): void {
         if (!this.map) return;
-        this.map.setCenter(this.map.getCenter(), zoom);
+        this.map.setZoom(zoom);
     }
 
     public setMapType(mapTypeId: string): void {
         if (!this.map) return;
         
-        // Map the mapTypeId to Yandex equivalent
         let mapType: string;
         switch (mapTypeId) {
-            case 'roadmap':
-                mapType = 'yandex#map';
-                break;
-            case 'satellite':
-                mapType = 'yandex#satellite';
-                break;
-            case 'hybrid':
-                mapType = 'yandex#hybrid';
-                break;
-            default:
-                mapType = 'yandex#map';
+            case 'satellite': mapType = 'yandex#satellite'; break;
+            case 'hybrid': mapType = 'yandex#hybrid'; break;
+            default: mapType = 'yandex#map';
         }
         
         this.map.setType(mapType);
@@ -239,62 +289,42 @@ export class YandexMapsProvider implements IMapProvider {
     public async initializeStreetView(containerId: string, options: StreetViewOptions): Promise<void> {
         return new Promise((resolve) => {
             ymaps.ready(async () => {
-                // Get container element and ensure it has dimensions
                 const container = document.getElementById(containerId);
                 if (!container) {
                     throw new Error(`Container element with ID "${containerId}" not found`);
                 }
                 
-                // Set explicit dimensions to avoid null offsetWidth error
                 container.style.width = '100%';
                 container.style.height = '100%';
                 container.style.minHeight = '300px';
                 container.style.display = 'block';
                 
-                // Make sure the container is visible in the DOM before creating the panorama
                 setTimeout(async () => {
                     try {
-                        // Convert position format
                         const position = [options.position.lat, options.position.lng];
                         
-                        // Store the pending POV values
                         this.pendingHeading = options.pov.heading;
                         this.pendingPitch = options.pov.pitch;
-                        this.forceNextPov = true;
                         
-                        console.log(`Storing pending POV for Yandex: heading=${this.pendingHeading}, pitch=${this.pendingPitch}`);
-                        
-                        // Find available panoramas at the specified position
                         const panoramas = await ymaps.panorama.locate(position);
                         
                         if (panoramas && panoramas.length > 0) {
-                            // Create panorama player with explicit initial direction
                             this.panoramaPlayer = new ymaps.panorama.Player(
                                 container,
                                 panoramas[0],
                                 {
                                     direction: [options.pov.heading, options.pov.pitch],
                                     controls: ['zoomControl', 'fullscreenControl'],
-                                    // Force a specific size to avoid dimension issues
+                                    suppressMapOpenBlock: true, // Suppress the "Open in Yandex" link
                                     width: container.offsetWidth || 640,
                                     height: container.offsetHeight || 480
                                 }
                             );
                             
-                            // Store the current panorama position
                             this.currentPanoramaPosition = options.position;
-                            
-                            // Set up event listeners for the panorama
                             this.setupPanoramaEventListeners();
-                            
-                            // Update pegman position and make visible
                             this.setPegmanPosition(options.position);
                             this.setPegmanVisible(true);
-                        } else {
-                            // No panorama available - show a message
-                            container.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; background:#f5f5f5;">
-                                <p>No street view available at this location</p>
-                            </div>`;
                         }
                     } catch (error) {
                         console.error('Error initializing Yandex panorama:', error);
@@ -309,8 +339,7 @@ export class YandexMapsProvider implements IMapProvider {
     }
 
     public async setStreetViewPosition(position: LatLng): Promise<void> {
-        // Store any current direction if available
-        if (this.panoramaPlayer && !this.pendingHeading && !this.pendingPitch) {
+        if (this.panoramaPlayer) {
             const currentDirection = this.panoramaPlayer.getDirection();
             this.pendingHeading = currentDirection[0];
             this.pendingPitch = currentDirection[1];
@@ -319,87 +348,68 @@ export class YandexMapsProvider implements IMapProvider {
         const yandexPosition = [position.lat, position.lng];
         
         try {
-            // Find available panoramas at the new position
             const panoramas = await ymaps.panorama.locate(yandexPosition);
             
             if (panoramas && panoramas.length > 0) {
                 if (this.panoramaPlayer) {
-                    // Update existing panorama
                     await this.panoramaPlayer.setPanorama(panoramas[0]);
                 } else {
-                    // Create new panorama player
                     const container = document.getElementById('street-view-container');
                     if (container) {
                         this.panoramaPlayer = new ymaps.panorama.Player(
                             container,
                             panoramas[0],
                             {
-                                direction: this.pendingHeading && this.pendingPitch ? 
+                                direction: this.pendingHeading !== null && this.pendingPitch !== null ? 
                                     [this.pendingHeading, this.pendingPitch] : 'auto',
-                                controls: ['zoomControl', 'fullscreenControl']
+                                controls: ['zoomControl', 'fullscreenControl'],
+                                suppressMapOpenBlock: true
                             }
                         );
                         
-                        // Set up event listeners for the panorama
                         this.setupPanoramaEventListeners();
                     }
                 }
                 
-                // Store the current panorama position
                 this.currentPanoramaPosition = position;
                 
-                // Apply pending POV if available
                 if (this.pendingHeading !== null && this.pendingPitch !== null) {
-                    setTimeout(() => {
-                        this.applyPendingPov();
-                    }, 500);
+                    setTimeout(() => this.applyPendingPov(), 500);
                 }
                 
-                // Notify about street view change if callback is registered
                 if (this.streetViewChangeCallback && this.panoramaPlayer) {
                     const direction = this.panoramaPlayer.getDirection();
                     this.streetViewChangeCallback(
                         position,
-                        direction[0], // heading
-                        direction[1]  // pitch
+                        direction[0],
+                        direction[1]
                     );
                 }
                 
-                // Show container
                 const container = document.getElementById('street-view-container');
                 if (container) {
                     container.style.display = 'block';
                 }
                 
-                // Make pegman visible
                 this.setPegmanVisible(true);
             } else {
                 console.log('No panorama available at the requested position');
                 
-                // Clean up existing panorama player
                 if (this.panoramaPlayer) {
                     try {
-                        // Destroy the player if possible
                         if (typeof this.panoramaPlayer.destroy === 'function') {
                             this.panoramaPlayer.destroy();
                         }
                     } catch (e) {
                         console.warn('Error destroying panorama player:', e);
                     }
-                    // Set the player reference to null
                     this.panoramaPlayer = null;
                 }
                 
-                // Get the container element
                 const container = document.getElementById('street-view-container');
                 if (container) {
-                    // Clear the container - don't show any message
                     container.innerHTML = '';
-                    
-                    // Keep the container visible but empty
                     container.style.display = 'block';
-                    
-                    // Optional: Make the container have a light background so it's not just blank
                     container.style.backgroundColor = '#f5f5f5';
                 }
             }
@@ -409,18 +419,11 @@ export class YandexMapsProvider implements IMapProvider {
     }
 
     public setStreetViewPOV(heading: number, pitch: number): void {
-        console.log(`Yandex: setStreetViewPOV heading=${heading}, pitch=${pitch}`);
-        
-        // Always store as pending, regardless of player state
         this.pendingHeading = heading;
         this.pendingPitch = pitch;
-        this.forceNextPov = true;
         
         if (this.panoramaPlayer) {
-            // If panorama player exists, apply immediately and set up repeated attempts
             this.applyPendingPov();
-        } else {
-            console.log(`Yandex: Stored POV heading=${heading}, pitch=${pitch} as pending`);
         }
     }
 
@@ -434,15 +437,12 @@ export class YandexMapsProvider implements IMapProvider {
         
         try {
             if (visible) {
-                // Make sure pegman is added to the map and visible
                 this.pegman.options.set('visible', true);
                 
-                // Ensure pegman is added to the map
                 if (this.map && !this.pegman.getMap()) {
                     this.map.geoObjects.add(this.pegman);
                 }
             } else {
-                // Hide pegman
                 this.pegman.options.set('visible', false);
             }
         } catch (e) {
@@ -453,36 +453,34 @@ export class YandexMapsProvider implements IMapProvider {
     public showCoverage(position?: LatLng): void {
         if (!this.map || !this.panoramaManager) return;
         
-        this.coverageVisible = true;
-        this.isPreventingDefaultPanorama = true;
-        
-        // Enable lookup mode to show blue lines on the map
+        // Enable panorama lookup to show the blue lines
         this.panoramaManager.enableLookup();
+        this.coverageVisible = true;
         
-        // Update pegman position if position is provided
         if (position) {
             this.setPegmanPosition(position);
         }
         
-        // Make pegman visible
         this.setPegmanVisible(true);
         
-        console.log('Yandex panorama coverage shown');
+        if (this.coverageToggleButton) {
+            this.coverageToggleButton.innerText = 'Click to disable coverage Map';
+        }
+        
+        console.log('Panorama coverage enabled with custom handling');
     }
-
+    
     public hideCoverage(): void {
         if (!this.map || !this.panoramaManager) return;
         
         this.coverageVisible = false;
-        this.isPreventingDefaultPanorama = false;
-        
-        // Disable lookup mode to hide blue lines
         this.panoramaManager.disableLookup();
         
-        // Hide pegman
-        this.setPegmanVisible(false);
+        if (this.coverageToggleButton) {
+            this.coverageToggleButton.innerText = 'Click to enable coverage Map';
+        }
         
-        console.log('Yandex panorama coverage hidden');
+        console.log('Panorama coverage disabled');
     }
 
     public onMapClick(callback: (position: LatLng) => void): void {
@@ -493,61 +491,17 @@ export class YandexMapsProvider implements IMapProvider {
         this.streetViewChangeCallback = callback;
     }
 
-    private setupMapEventListeners(): void {
-        if (!this.map) return;
-        
-        // Handle map clicks
-        this.map.events.add('click', (e: any) => {
-            // Don't process if this is being handled by our custom panorama interceptor
-            if (this.isPreventingDefaultPanorama && this.coverageVisible) {
-                return;
-            }
-            
-            const coords = e.get('coords');
-            const position = { lat: coords[0], lng: coords[1] };
-            
-            // Call the registered callback
-            if (this.mapClickCallback) {
-                this.mapClickCallback(position);
-            }
-
-            // Handle Shift+click directly (as specified in requirements)
-            const originalEvent = e.get('domEvent').originalEvent;
-            if (originalEvent && originalEvent.shiftKey) {
-                // Drop pegman at click location and show street view
-                this.setPegmanPosition(position);
-                this.setPegmanVisible(true);
-                this.setStreetViewPosition(position);
-            }
-        });
-        
-        // Handle pegman drag
-        if (this.pegman) {
-            this.pegman.events.add('dragend', (e: any) => {
-                if (!this.pegman) return;
-                
-                const coords = this.pegman.geometry.getCoordinates();
-                const position = { lat: coords[0], lng: coords[1] };
-                
-                // Update street view to the dragged position
-                this.setStreetViewPosition(position);
-            });
-        }
-    }
-
     private setupPanoramaEventListeners(): void {
         if (!this.panoramaPlayer) return;
         
-        // Listen for position changes
+        // Handle position changes
         this.panoramaPlayer.events.add('position_changed', () => {
             if (!this.panoramaPlayer || !this.currentPanoramaPosition) return;
             
             try {
-                // Use safe access to panorama data
                 const panorama = this.panoramaPlayer.getPanorama();
                 if (!panorama) return;
                 
-                // Safely extract the position data
                 let position;
                 try {
                     position = panorama.getPosition();
@@ -558,109 +512,45 @@ export class YandexMapsProvider implements IMapProvider {
                 
                 if (!position || position.length < 2) return;
                 
-                // Create a LatLng object from the position array
                 const latLng = { 
                     lat: position[0], 
                     lng: position[1] 
                 };
                 
-                console.log('Yandex panorama position changed:', latLng);
-                
-                // Update stored position
                 this.currentPanoramaPosition = latLng;
                 
-                // Update pegman marker position
                 if (this.map && this.pegman) {
                     this.pegman.geometry.setCoordinates([latLng.lat, latLng.lng]);
                 }
                 
-                // Update map center
                 if (this.map) {
                     this.map.setCenter([latLng.lat, latLng.lng]);
                 }
                 
-                // Call the registered callback
                 if (this.streetViewChangeCallback) {
                     const direction = this.panoramaPlayer.getDirection();
                     this.streetViewChangeCallback(
                         latLng,
-                        direction[0], // heading
-                        direction[1]  // pitch
+                        direction[0],
+                        direction[1]
                     );
                 }
             } catch (error) {
-                console.error('Error handling Yandex panorama position change:', error);
+                console.error('Error handling panorama position change:', error);
             }
         });
         
-        // The Yandex API might use different event names
-        // Try both 'panoramachange' and 'panorama_changed'
-        ['panoramachange', 'panorama_changed'].forEach(eventName => {
-            try {
-                this.panoramaPlayer?.events.add(eventName, () => {
-                    if (!this.panoramaPlayer) return;
-                    
-                    try {
-                        // Delay to ensure the panorama is fully loaded
-                        setTimeout(() => {
-                            // Get the new panorama
-                            const panorama = this.panoramaPlayer?.getPanorama();
-                            if (!panorama) return;
-                            
-                            // Get position data safely
-                            let position;
-                            try {
-                                position = panorama.getPosition();
-                            } catch (e) {
-                                console.warn(`Error getting panorama position after ${eventName}:`, e);
-                                return;
-                            }
-                            
-                            if (!position || position.length < 2) return;
-                            
-                            const latLng = { 
-                                lat: position[0], 
-                                lng: position[1] 
-                            };
-                            
-                            console.log(`Yandex panorama ${eventName} to:`, latLng);
-                            
-                            // Update stored position
-                            this.currentPanoramaPosition = latLng;
-                            
-                            // Update pegman marker position
-                            if (this.map && this.pegman) {
-                                this.pegman.geometry.setCoordinates([latLng.lat, latLng.lng]);
-                                this.setPegmanVisible(true);
-                            }
-                            
-                            // Apply any pending POV
-                            if (this.pendingHeading !== null && this.pendingPitch !== null && this.forceNextPov) {
-                                this.applyPendingPov();
-                            }
-                        }, 200);
-                    } catch (error) {
-                        console.error(`Error handling Yandex ${eventName}:`, error);
-                    }
-                });
-            } catch (e) {
-                console.warn(`Could not add ${eventName} listener:`, e);
-            }
-        });
-        
-        // Listen for direction changes
+        // Handle direction changes
         this.panoramaPlayer.events.add('directionchange', () => {
             if (!this.panoramaPlayer || !this.currentPanoramaPosition) return;
             
-            // Get current direction
             const direction = this.panoramaPlayer.getDirection();
             
-            // Call the registered callback
             if (this.streetViewChangeCallback) {
                 this.streetViewChangeCallback(
                     this.currentPanoramaPosition,
-                    direction[0], // heading
-                    direction[1]  // pitch
+                    direction[0],
+                    direction[1]
                 );
             }
         });
@@ -668,23 +558,21 @@ export class YandexMapsProvider implements IMapProvider {
 
     private applyPendingPov(): void {
         if (!this.panoramaPlayer || this.pendingHeading === null || this.pendingPitch === null) return;
-
-        console.log(`Applying pending POV to Yandex panorama: heading=${this.pendingHeading}, pitch=${this.pendingPitch}`);
         
-        // Clear any existing interval
+        // Clear existing interval
         if (this.pendingPovInterval) {
             clearInterval(this.pendingPovInterval);
             this.pendingPovInterval = null;
         }
         
-        // Set POV immediately
+        // Apply the POV immediately
         try {
             this.panoramaPlayer.setDirection([this.pendingHeading, this.pendingPitch]);
         } catch (e) {
-            console.warn('Error setting initial direction:', e);
+            console.warn('Error setting panorama direction:', e);
         }
         
-        // Set up an interval to reapply the POV several times to overcome any internal resets
+        // Set up a retry
         let attempts = 0;
         this.pendingPovInterval = setInterval(() => {
             if (!this.panoramaPlayer) {
@@ -694,36 +582,22 @@ export class YandexMapsProvider implements IMapProvider {
             }
             
             try {
-                // Check current POV against what we want
                 const currentDirection = this.panoramaPlayer.getDirection();
                 const headingDiff = Math.abs(currentDirection[0] - this.pendingHeading!);
                 const pitchDiff = Math.abs(currentDirection[1] - this.pendingPitch!);
                 
-                // If the POV is close enough to what we want, stop trying
-                if (headingDiff < 2 && pitchDiff < 2) {
-                    console.log('Yandex panorama POV successfully set to desired values');
+                if (headingDiff < 2 && pitchDiff < 2 || attempts >= 5) {
                     clearInterval(this.pendingPovInterval);
                     this.pendingPovInterval = null;
-                    this.forceNextPov = false;
                     return;
                 }
                 
-                // Otherwise, try again
-                if (attempts < 5) {
-                    console.log(`Retrying Yandex panorama POV (attempt ${attempts+1}): heading=${this.pendingHeading}, pitch=${this.pendingPitch}`);
-                    this.panoramaPlayer.setDirection([this.pendingHeading!, this.pendingPitch!]);
-                    attempts++;
-                } else {
-                    console.log('Max POV setting attempts reached for Yandex panorama');
-                    clearInterval(this.pendingPovInterval);
-                    this.pendingPovInterval = null;
-                    this.forceNextPov = false;
-                }
+                this.panoramaPlayer.setDirection([this.pendingHeading!, this.pendingPitch!]);
+                attempts++;
             } catch (e) {
-                console.warn('Error in pending POV application:', e);
                 clearInterval(this.pendingPovInterval);
                 this.pendingPovInterval = null;
             }
-        }, 300); // Try every 300ms
+        }, 300);
     }
 }

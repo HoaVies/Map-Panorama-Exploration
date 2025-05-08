@@ -126,55 +126,79 @@ export class YandexMapsProvider implements IMapProvider {
         });
     }
     
-    private setupPanoramaManagerEvents(): void {
-        if (!this.panoramaManager) return;
-        
-        // Store the original openPlayer method to use later
-        this._originalOpenPlayer = this.panoramaManager.openPlayer;
-        
-        // Replace the openPlayer method with our custom implementation
-        this.panoramaManager.openPlayer = (panorama: any, locateOptions?: any, options?: any) => {
-            // Only allow the default panorama player when coverage is not enabled
-            if (!this.coverageVisible) {
-                return this._originalOpenPlayer.call(this.panoramaManager, panorama, locateOptions, options);
-            }
+private setupPanoramaManagerEvents(): void {
+    if (!this.panoramaManager) return;
+    
+    // 1. Intercept BOTH before it tries to open and when it opens
+    this.panoramaManager.events.add(['openplayer', 'beforeopenplayer'], (e: any) => {
+        if (this.coverageVisible) {
+            // Forcefully prevent the default panorama
+            e.preventDefault();
             
-            // When coverage is enabled, we handle it 
-            console.log('Intercepted panorama open request');
+            // Get panorama position - try multiple approaches
+            let position: LatLng | null = null;
             
-            // Try to get coordinates from the panorama
+            // Try to get panorama from event
+            const panorama = e.get('panorama');
             if (panorama && typeof panorama.getPosition === 'function') {
                 try {
                     const coords = panorama.getPosition();
                     if (coords && coords.length >= 2) {
-                        const position = {
+                        position = {
                             lat: coords[0],
                             lng: coords[1]
                         };
-                        
-                        // Move pegman to this position and show our custom panorama
-                        this.setPegmanPosition(position);
-                        this.setPegmanVisible(true);
-                        this.setStreetViewPosition(position);
-                        
-                        // Call the map click callback if registered
-                        if (this.mapClickCallback) {
-                            this.mapClickCallback(position);
-                        }
                     }
-                } catch (e) {
-                    console.warn('Error getting panorama coordinates:', e);
+                } catch (err) {
+                    console.warn('Error getting panorama position:', err);
                 }
             }
             
-            return Promise.resolve();
-        };
-        
-        // Listen for the locate event which occurs when searching for panoramas
-        this.panoramaManager.events.add('locate', (e: any) => {
-            if (!this.coverageVisible) return;
+            // If we couldn't get position from panorama, try event data
+            if (!position) {
+                const point = e.get('point');
+                if (point && point.length >= 2) {
+                    position = {
+                        lat: point[0],
+                        lng: point[1]
+                    };
+                }
+            }
             
+            // If we got a position, use it
+            if (position) {
+                // Update pegman position
+                this.setPegmanPosition(position);
+                this.setPegmanVisible(true);
+                
+                // Open our own panorama view
+                this.setStreetViewPosition(position);
+                
+                // Call the map click callback
+                if (this.mapClickCallback) {
+                    this.mapClickCallback(position);
+                }
+            }
+            
+            return false; // Ensure we explicitly return false to prevent default
+        }
+    });
+    
+    // 2. Monitor when a player is already opened and intercept it
+    this.panoramaManager.events.add('closeplayer', () => {
+        // If our custom panorama is active, prevent closing it
+        if (this.coverageVisible && this.panoramaPlayer) {
+            console.log('Intercepted panorama close event');
+            // Optional: handle any cleanup needed
+        }
+    });
+    
+    // 3. Also intercept the locate event which happens before opening
+    this.panoramaManager.events.add('locate', (e: any) => {
+        if (this.coverageVisible) {
             console.log('Panorama locate event intercepted');
+            
+            // Get the point from the event
             const point = e.get('point');
             if (point && point.length >= 2) {
                 const position = {
@@ -182,83 +206,103 @@ export class YandexMapsProvider implements IMapProvider {
                     lng: point[1]
                 };
                 
-                // Call our map click handler
+                // Synchronize our pegman to this position
+                this.setPegmanPosition(position);
+                
+                // Optionally notify about the click
                 if (this.mapClickCallback) {
                     this.mapClickCallback(position);
                 }
                 
+                // Prevent the default panorama lookup
                 e.preventDefault();
             }
-        });
-    }
+        }
+    });
+}
     
-    private setupPegmanEvents(): void {
+private setupPegmanEvents(): void {
+    if (!this.pegman) return;
+    
+    this.pegman.events.add('dragend', () => {
         if (!this.pegman) return;
         
-        // Add dragend event handler
-        this.pegman.events.add('dragend', () => {
-            if (!this.pegman) return;
-            
-            const coords = this.pegman.geometry.getCoordinates();
-            const position = {
-                lat: coords[0],
-                lng: coords[1]
-            };
-            
-            this.setStreetViewPosition(position);
-        });
-    }
+        const coords = this.pegman.geometry.getCoordinates();
+        const position = {
+            lat: coords[0],
+            lng: coords[1]
+        };
+        
+        this.setStreetViewPosition(position);
+    });
+    
+    this.pegman.events.add('click', (e: any) => {
+        if (!this.pegman) return;
+        
+        // Prevent the event from bubbling up to the map
+        e.preventDefault();
+        
+        const coords = this.pegman.geometry.getCoordinates();
+        const position = {
+            lat: coords[0],
+            lng: coords[1]
+        };
+        
+        // Open street view at the pegman's position
+        this.setStreetViewPosition(position);
+        
+        // If you have a callback registered, notify it
+        if (this.mapClickCallback) {
+            this.mapClickCallback(position);
+        }
+        
+        return false; // Explicitly return false to prevent default behavior
+    });
+}
     
     private setupMapEventListeners(): void {
         if (!this.map) return;
         
-        // Handle map clicks - specifically for coverage areas
-        this.map.events.add('click', (e: any) => {
-            // If coverage is enabled
-            if (this.coverageVisible) {
-                // Get click coordinates
-                const coords = e.get('coords');
-                const position = { lat: coords[0], lng: coords[1] };
-                
-                // Check if there's a panorama at this position
-                ymaps.panorama.locate(coords).then((panoramas: any[]) => {
-                    if (panoramas && panoramas.length > 0) {
-                        // Move pegman to this location and update panorama
-                        this.setPegmanPosition(position);
-                        this.setPegmanVisible(true);
-                        this.setStreetViewPosition(position);
-                        
-                        // Call map click callback if registered
-                        if (this.mapClickCallback) {
-                            this.mapClickCallback(position);
+        // Handle all map-related events that could trigger a panorama
+        ['click', 'dblclick'].forEach(eventName => {
+            this.map!.events.add(eventName, (e: any) => {
+                if (this.coverageVisible) {
+                    // Always prevent default for these events when coverage is on
+                    e.preventDefault();
+                    
+                    // Get click coordinates
+                    const coords = e.get('coords');
+                    const position = { lat: coords[0], lng: coords[1] };
+                    
+                    // Check if there's a panorama at this position
+                    ymaps.panorama.locate(coords).then((panoramas: any[]) => {
+                        if (panoramas && panoramas.length > 0) {
+                            // Move pegman to this location and update our panorama
+                            this.setPegmanPosition(position);
+                            this.setPegmanVisible(true);
+                            this.setStreetViewPosition(position);
+                            
+                            // Notify callback
+                            if (this.mapClickCallback) {
+                                this.mapClickCallback(position);
+                            }
                         }
-                    }
-                }).catch((error: any) => {
-                    console.error('Error checking for panorama at location:', error);
-                });
+                    }).catch((error: any) => {
+                        console.error('Error checking for panorama at location:', error);
+                    });
+                    
+                    return false; // Explicitly return false to prevent default behavior
+                }
                 
-                // Prevent default handling of the click
+            });
+        });
+        
+        // Additionally, completely block the map's actiontick event when coverage is on
+        // This event is often used for internal state updates in Yandex
+        this.map.events.add('actiontick', (e: any) => {
+            if (this.coverageVisible) {
                 e.preventDefault();
-                ymaps.event.preventMap();
-                return;
-            }
-            
-            // Handle shift+click to directly open street view
-            const originalEvent = e.get('domEvent').originalEvent;
-            if (originalEvent && originalEvent.shiftKey) {
-                const coords = e.get('coords');
-                const position = { lat: coords[0], lng: coords[1] };
-                
-                this.setPegmanPosition(position);
-                this.setPegmanVisible(true);
-                this.setStreetViewPosition(position);
-                return;
-            }
-            
-            // Forward regular clicks to the callback
-            if (this.mapClickCallback) {
-                const coords = e.get('coords');
-                this.mapClickCallback({ lat: coords[0], lng: coords[1] });
+                return false;
             }
         });
     }
@@ -450,25 +494,35 @@ export class YandexMapsProvider implements IMapProvider {
         }
     }
 
-    public showCoverage(position?: LatLng): void {
-        if (!this.map || !this.panoramaManager) return;
-        
-        // Enable panorama lookup to show the blue lines
-        this.panoramaManager.enableLookup();
-        this.coverageVisible = true;
-        
-        if (position) {
-            this.setPegmanPosition(position);
-        }
-        
-        this.setPegmanVisible(true);
-        
-        if (this.coverageToggleButton) {
-            this.coverageToggleButton.innerText = 'Click to disable coverage Map';
-        }
-        
-        console.log('Panorama coverage enabled with custom handling');
+public showCoverage(position?: LatLng): void {
+    if (!this.map || !this.panoramaManager) return;
+    
+    // Enable panorama lookup to show the blue lines
+    this.panoramaManager.enableLookup();
+    this.coverageVisible = true;
+    
+    // Immediately after enabling lookup, check if there's already a player open
+    const currentPlayer = this.panoramaManager.getPlayer();
+    if (currentPlayer) {
+        // Force close any existing panorama player
+        this.panoramaManager.closePlayer();
     }
+
+    
+    // Add an extra protection - monitor for player creation
+    const checkForPlayer = setInterval(() => {
+        if (!this.coverageVisible) {
+            clearInterval(checkForPlayer);
+            return;
+        }
+        
+        const player = this.panoramaManager.getPlayer();
+        if (player) {
+            console.log('Detected panorama player - closing it');
+            this.panoramaManager.closePlayer();
+        }
+    }, 500);
+}
     
     public hideCoverage(): void {
         if (!this.map || !this.panoramaManager) return;

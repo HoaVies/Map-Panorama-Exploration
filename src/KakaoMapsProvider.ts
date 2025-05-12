@@ -20,12 +20,23 @@ export class KakaoMapsProvider implements IMapProvider {
     private pendingPitch: number | null = null;
     private pendingPovInterval: any = null; // For repeated attempts to set POV
     private forceNextPov: boolean = false; // Flag to force POV on next pano load
+    
+    // Coverage warning elements
+    private coverageWarningElement: HTMLElement | null = null;
+    private lastKnownValidPosition: LatLng | null = null;
 
     public initializeMap(containerId: string, options: MapOptions): void {
         const mapContainer = document.getElementById(containerId);
         if (!mapContainer) {
             console.error('Map container not found');
             return;
+        }
+
+        // Check if the initial position is within Kakao's coverage
+        if (!this.isWithinKakaoCoverage(options.center)) {
+            console.warn('Initial position is outside Kakao Maps coverage');
+            // Use a default position within Korea if outside coverage
+            options.center = { lat: 37.5665, lng: 126.9780 }; // Seoul
         }
 
         const mapOptions = {
@@ -36,6 +47,10 @@ export class KakaoMapsProvider implements IMapProvider {
         this.map = new kakao.maps.Map(mapContainer, mapOptions);
         this.roadviewClient = new kakao.maps.RoadviewClient();
         this.currentPosition = options.center;
+        this.lastKnownValidPosition = options.center;
+        
+        // Create coverage warning element
+        this.createCoverageWarning(mapContainer);
         
         // Set map type
         this.setMapType(options.mapTypeId);
@@ -46,14 +61,166 @@ export class KakaoMapsProvider implements IMapProvider {
         // Create and add the custom map type controls
         this.createCustomMapTypeControls(mapContainer);
 
+        // Create pegman marker that's always visible
+        this.createPegmanMarker(options.center);
+        
         // Initialize click handler
         this.setupMapClickHandler();
+        
+        // Set up map event listeners to detect when moving outside coverage
+        this.setupMapBoundsListener();
         
         // Ensure overlay is initially off
         this.overlayOn = false;
         if (this.map) {
             this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         }
+    }
+
+    private createCoverageWarning(mapContainer: HTMLElement): void {
+        this.coverageWarningElement = document.createElement('div');
+        this.coverageWarningElement.id = 'kakao-coverage-warning';
+        this.coverageWarningElement.style.position = 'absolute';
+        this.coverageWarningElement.style.top = '50%';
+        this.coverageWarningElement.style.left = '50%';
+        this.coverageWarningElement.style.transform = 'translate(-50%, -50%)';
+        this.coverageWarningElement.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+        this.coverageWarningElement.style.padding = '20px 30px';
+        this.coverageWarningElement.style.borderRadius = '8px';
+        this.coverageWarningElement.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+        this.coverageWarningElement.style.zIndex = '1000';
+        this.coverageWarningElement.style.textAlign = 'center';
+        this.coverageWarningElement.style.display = 'none';
+        this.coverageWarningElement.style.maxWidth = '400px';
+        
+        this.coverageWarningElement.innerHTML = `
+            <h3 style="margin: 0 0 10px 0; color: #333;">Outside Kakao Maps Coverage</h3>
+            <p style="margin: 0 0 15px 0; color: #666;">Kakao Maps only covers Korea and nearby regions.</p>
+            <button id="return-to-coverage" style="
+                background-color: #FEE500;
+                color: #000;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+            ">Return to Coverage Area</button>
+        `;
+        
+        mapContainer.appendChild(this.coverageWarningElement);
+        
+        // Add click handler to return button
+        const returnButton = this.coverageWarningElement.querySelector('#return-to-coverage');
+        if (returnButton) {
+            returnButton.addEventListener('click', () => {
+                this.returnToCoverageArea();
+            });
+        }
+    }
+
+    private setupMapBoundsListener(): void {
+        if (!this.map) return;
+        
+        // Listen for map drag end and zoom changes
+        kakao.maps.event.addListener(this.map, 'dragend', () => {
+            this.checkMapCoverage();
+        });
+        
+        kakao.maps.event.addListener(this.map, 'zoom_changed', () => {
+            this.checkMapCoverage();
+        });
+        
+        // Also check when bounds change
+        kakao.maps.event.addListener(this.map, 'bounds_changed', () => {
+            this.checkMapCoverage();
+        });
+    }
+
+    private checkMapCoverage(): void {
+        if (!this.map) return;
+        
+        const center = this.map.getCenter();
+        const position = {
+            lat: center.getLat(),
+            lng: center.getLng()
+        };
+        
+        if (!this.isWithinKakaoCoverage(position)) {
+            this.showCoverageWarning();
+        } else {
+            this.hideCoverageWarning();
+            // Store this as the last known valid position
+            this.lastKnownValidPosition = position;
+        }
+    }
+
+    private showCoverageWarning(): void {
+        if (this.coverageWarningElement) {
+            this.coverageWarningElement.style.display = 'block';
+        }
+    }
+
+    private hideCoverageWarning(): void {
+        if (this.coverageWarningElement) {
+            this.coverageWarningElement.style.display = 'none';
+        }
+    }
+
+    private returnToCoverageArea(): void {
+        if (!this.map) return;
+        
+        // Return to the last known valid position, or Seoul if none exists
+        const targetPosition = this.lastKnownValidPosition || { lat: 37.5665, lng: 126.9780 };
+        
+        this.map.setCenter(new kakao.maps.LatLng(targetPosition.lat, targetPosition.lng));
+        this.hideCoverageWarning();
+        
+        // Also update the pegman position
+        if (this.pegmanMarker) {
+            this.pegmanMarker.setPosition(new kakao.maps.LatLng(targetPosition.lat, targetPosition.lng));
+        }
+    }
+
+    private isWithinKakaoCoverage(position: LatLng): boolean {
+        // Kakao Maps primarily covers Korea and some nearby areas
+        // This is an approximate bounding box for their coverage
+        const bounds = {
+            north: 43.0,  // North of North Korea
+            south: 33.0,  // South of Jeju Island
+            east: 132.0,  // East Sea
+            west: 124.0   // Yellow Sea
+        };
+        
+        return position.lat >= bounds.south && 
+               position.lat <= bounds.north && 
+               position.lng >= bounds.west && 
+               position.lng <= bounds.east;
+    }
+
+    private createPegmanMarker(position: LatLng): void {
+        if (!this.map) return;
+
+        // Create marker image for pegman
+        const markImage = new kakao.maps.MarkerImage(
+            './src/pegman.png',
+            new kakao.maps.Size(26, 46),
+            {
+                spriteSize: new kakao.maps.Size(26, 46),
+                spriteOrigin: new kakao.maps.Point(0, 0),
+                offset: new kakao.maps.Point(13, 23)
+            }
+        );
+        
+        // Create draggable marker (pegman) that's always visible
+        this.pegmanMarker = new kakao.maps.Marker({
+            image: markImage,
+            position: new kakao.maps.LatLng(position.lat, position.lng),
+            draggable: true,
+            map: this.map // Always add to map
+        });
+
+        // Setup pegman events
+        this.setupPegmanEvents();
     }
 
     private createRoadviewControl(mapContainer: HTMLElement): void {
@@ -201,24 +368,6 @@ export class KakaoMapsProvider implements IMapProvider {
         // Create roadview object
         this.roadview = new kakao.maps.Roadview(roadviewContainer);
         
-        // Create marker image for pegman
-        const markImage = new kakao.maps.MarkerImage(
-            './src/pegman.png',
-            new kakao.maps.Size(26, 46),
-            {
-                spriteSize: new kakao.maps.Size(26, 46),    // Size of entire image
-                spriteOrigin: new kakao.maps.Point(0, 0),   // Start at top-left corner
-                offset: new kakao.maps.Point(13, 23)        // center of the image
-            }
-        );
-        
-        // Create draggable marker (pegman)
-        this.pegmanMarker = new kakao.maps.Marker({
-            image: markImage,
-            position: new kakao.maps.LatLng(options.position.lat, options.position.lng),
-            draggable: true
-        });
-
         // Set initial roadview position
         this.currentPosition = options.position;
         
@@ -231,9 +380,6 @@ export class KakaoMapsProvider implements IMapProvider {
         
         // Setup roadview events before setting position to catch initialization
         this.setupRoadviewEvents();
-        
-        // Add dragend event to pegman marker
-        this.setupPegmanEvents();
         
         // Now set the position which will trigger initialization
         this.setRoadviewPosition(options.position);
@@ -280,8 +426,8 @@ export class KakaoMapsProvider implements IMapProvider {
                     this.map.setCenter(rvPosition);
                 }
                 
-                // Update pegman marker if overlay is active
-                if (this.pegmanMarker && this.overlayOn) {
+                // Update pegman marker position (always update, regardless of overlay state)
+                if (this.pegmanMarker) {
                     this.pegmanMarker.setPosition(rvPosition);
                 }
                 
@@ -384,6 +530,7 @@ export class KakaoMapsProvider implements IMapProvider {
     private setupPegmanEvents(): void {
         if (!this.pegmanMarker) return;
         
+        // Handle pegman drag end
         kakao.maps.event.addListener(this.pegmanMarker, 'dragend', () => {
             // Don't process if we're already handling an event to prevent loops
             if (this.isProcessingEvent) return;
@@ -404,6 +551,38 @@ export class KakaoMapsProvider implements IMapProvider {
                     lat: position.getLat(),
                     lng: position.getLng()
                 });
+            } finally {
+                this.isProcessingEvent = false;
+            }
+        });
+
+        // Handle pegman click - show panorama regardless of coverage visibility
+        kakao.maps.event.addListener(this.pegmanMarker, 'click', () => {
+            if (this.isProcessingEvent) return;
+            
+            this.isProcessingEvent = true;
+            try {
+                if (!this.pegmanMarker) return;
+                
+                const position = this.pegmanMarker.getPosition();
+                
+                // Update current position
+                this.currentPosition = {
+                    lat: position.getLat(),
+                    lng: position.getLng()
+                };
+                
+                // Open street view at pegman position
+                this.setRoadviewPosition({
+                    lat: position.getLat(),
+                    lng: position.getLng()
+                });
+                
+                // Make sure the street view container is visible
+                const container = document.getElementById('street-view-container');
+                if (container) {
+                    container.style.display = 'block';
+                }
             } finally {
                 this.isProcessingEvent = false;
             }
@@ -435,7 +614,7 @@ export class KakaoMapsProvider implements IMapProvider {
                 }
                 
                 // Update pegman position
-                if (this.pegmanMarker && this.overlayOn) {
+                if (this.pegmanMarker) {
                     this.pegmanMarker.setPosition(kakaoPosition);
                 }
             } else {
@@ -460,11 +639,18 @@ export class KakaoMapsProvider implements IMapProvider {
     }
 
     public setCenter(position: LatLng): void {
-        if (this.map) {
-            this.map.setCenter(new kakao.maps.LatLng(position.lat, position.lng));
-            // Update current position
-            this.currentPosition = position;
+        if (!this.map) return;
+        
+        // Check if the new position is within coverage
+        if (!this.isWithinKakaoCoverage(position)) {
+            console.warn('Attempted to set center outside Kakao Maps coverage');
+            this.showCoverageWarning();
+            // Still allow the center to be set, but show the warning
         }
+        
+        this.map.setCenter(new kakao.maps.LatLng(position.lat, position.lng));
+        // Update current position
+        this.currentPosition = position;
     }
 
     public setZoom(zoom: number): void {
@@ -502,8 +688,15 @@ export class KakaoMapsProvider implements IMapProvider {
     }
 
     public setStreetViewPosition(position: LatLng): void {
+        // Check if the position is within Kakao's coverage
+        if (!this.isWithinKakaoCoverage(position)) {
+            console.warn('Street view position is outside Kakao Maps coverage');
+            // You might want to show a different message or handle this differently
+            return;
+        }
+        
         const kakaoPosition = new kakao.maps.LatLng(position.lat, position.lng);
-        if (this.pegmanMarker && this.overlayOn) {
+        if (this.pegmanMarker) {
             this.pegmanMarker.setPosition(kakaoPosition);
         }
         
@@ -541,18 +734,20 @@ export class KakaoMapsProvider implements IMapProvider {
         // Update current position
         this.currentPosition = position;
         
-        if (this.pegmanMarker && this.overlayOn) {
+        if (this.pegmanMarker) {
             this.pegmanMarker.setPosition(new kakao.maps.LatLng(position.lat, position.lng));
         }
     }
 
     public setPegmanVisible(visible: boolean): void {
-        if (this.pegmanMarker && this.map && this.overlayOn) {
-            if (visible) {
-                this.pegmanMarker.setMap(this.map);
-            } else {
-                this.pegmanMarker.setMap(null);
-            }
+        if (!this.pegmanMarker || !this.map) return;
+        
+        // Pegman should always be visible, regardless of overlay state
+        // So we always set it to the map when requested to be visible
+        if (visible) {
+            this.pegmanMarker.setMap(this.map);
+        } else {
+            this.pegmanMarker.setMap(null);
         }
     }
 
@@ -570,16 +765,8 @@ export class KakaoMapsProvider implements IMapProvider {
         // Add roadview overlay to map
         this.map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         
-        // Show pegman marker on map
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setMap(this.map);
-            
-            // Position pegman at map center or provided position
-            const targetPosition = position ? 
-                new kakao.maps.LatLng(position.lat, position.lng) : 
-                this.map.getCenter();
-            this.pegmanMarker.setPosition(targetPosition);
-        }
+        // Note: We no longer control pegman visibility here
+        // The pegman is always visible as it's managed independently
     }
 
     public hideCoverage(): void {
@@ -596,10 +783,8 @@ export class KakaoMapsProvider implements IMapProvider {
         // Remove roadview overlay
         this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         
-        // Hide pegman marker
-        if (this.pegmanMarker) {
-            this.pegmanMarker.setMap(null);
-        }
+        // Note: We don't hide the pegman here anymore
+        // The pegman remains visible regardless of coverage state
     }
 
     private setupMapClickHandler(): void {
@@ -611,11 +796,6 @@ export class KakaoMapsProvider implements IMapProvider {
             
             this.isProcessingEvent = true;
             try {
-                // Only handle clicks when roadview overlay is active
-                if (!this.overlayOn) {
-                    return;
-                }
-                
                 const latlng = mouseEvent.latLng;
                 
                 // Update current position
@@ -624,6 +804,7 @@ export class KakaoMapsProvider implements IMapProvider {
                     lng: latlng.getLng()
                 };
                 
+                // Always call the map click callback
                 if (this.mapClickCallback && latlng) {
                     this.mapClickCallback({
                         lat: latlng.getLat(),
@@ -631,16 +812,19 @@ export class KakaoMapsProvider implements IMapProvider {
                     });
                 }
                 
-                // If pegman marker exists, update its position
-                if (this.pegmanMarker) {
-                    this.pegmanMarker.setPosition(latlng);
+                // Only handle street view opening when overlay is active
+                if (this.overlayOn) {
+                    // If pegman marker exists, update its position
+                    if (this.pegmanMarker) {
+                        this.pegmanMarker.setPosition(latlng);
+                    }
+                    
+                    // Try to set street view at clicked position
+                    this.setRoadviewPosition({
+                        lat: latlng.getLat(),
+                        lng: latlng.getLng()
+                    });
                 }
-                
-                // Try to set street view at clicked position
-                this.setRoadviewPosition({
-                    lat: latlng.getLat(),
-                    lng: latlng.getLng()
-                });
             } finally {
                 this.isProcessingEvent = false;
             }

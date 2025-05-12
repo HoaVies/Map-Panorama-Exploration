@@ -300,7 +300,6 @@ async function cleanupCurrentProvider(): Promise<void> {
     try {
         // Perform provider-specific cleanup
         if (currentProviderType === 'mapycz') {
-            // For Mapy.cz, call the cleanup method we added
             const mapyCzProvider = currentProvider as any;
             if (typeof mapyCzProvider.cleanup === 'function') {
                 mapyCzProvider.cleanup();
@@ -347,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusElement = document.createElement('div');
         statusElement.id = 'sync-status';
         statusElement.style.position = 'fixed';
-        statusElement.style.top = '10px';
+        statusElement.style.top = '75px';
         statusElement.style.left = '50%';
         statusElement.style.transform = 'translateX(-50%)';
         statusElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';

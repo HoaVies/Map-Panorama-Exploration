@@ -11,34 +11,113 @@
             padding: 0;
             font-family: Arial, sans-serif;
         }
+        
+        /* Default vertical layout */
         .container {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
+        
+        /* Horizontal layout */
+        .container.horizontal {
+            flex-direction: row;
+        }
+        
+        .container.horizontal #map-container {
+            border-bottom: none;
+            border-right: 2px solid #ccc;
+        }
+        
+        /* Vertical layout (explicit) */
+        .container.vertical {
+            flex-direction: column;
+        }
+        
+        .container.vertical #map-container {
+            border-bottom: 2px solid #ccc;
+            border-right: none;
+        }
+        
         #map-container {
             flex: 1;
-            border-bottom: 2px solid #ccc;
             position: relative;
         }
+        
         #street-view-container {
             flex: 1;
         }
-        .provider-selector {
+        
+        .controls-container {
             position: absolute;
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .provider-selector {
             background-color: white;
             padding: 10px;
             border-radius: 5px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
+        
         .provider-selector select {
             padding: 5px;
             margin-left: 10px;
         }
+        
+        .layout-toggle {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .layout-toggle button {
+            padding: 8px 16px;
+            border: none;
+            background-color: #4285f4;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .layout-toggle button:hover {
+            background-color: #3367d6;
+        }
+        
+        .layout-toggle button:active {
+            background-color: #2a56c6;
+        }
+        
+        /* Icon styling for the button */
+        .layout-toggle button::before {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            vertical-align: middle;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .layout-toggle button.horizontal::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M11 3v18h2V3h-2zm-6 0v18h2V3H5zm12 0v18h2V3h-2z'/%3E%3C/svg%3E");
+        }
+        
+        .layout-toggle button.vertical::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M3 11h18v2H3v-2zm0-6h18v2H3V5zm0 12h18v2H3v-2z'/%3E%3C/svg%3E");
+        }
+        
         #location-info {
             position: absolute;
             display: none;
@@ -58,12 +137,14 @@
             background-size: 350px 32px;
             background-position: -44px 0;
             cursor: pointer;
-            z-index: 10000; /* Super high z-index to be above everything */
-            pointer-events: auto !important; /* Force pointer events */
+            z-index: 10000;
+            pointer-events: auto !important;
         }
+        
         .yandex-dom-pegman:hover {
             background-position: -88px 0;
         }
+        
         .yandex-dom-pegman.dragging {
             background-position: -132px 0;
         }
@@ -85,77 +166,120 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 <body>
-    <div class="provider-selector">
-        <label>Map Provider:</label>
-        <select id="provider-select">
-            <option value="google">Google Maps</option>
-            <option value="kakao">Kakao Maps</option>
-            <option value="yandex">Yandex Maps</option>
-            <option value="mapycz">Mapy.cz</option>
-        </select>
+    <div class="controls-container">
+        <div class="provider-selector">
+            <label>Map Provider:</label>
+            <select id="provider-select">
+                <option value="google">Google Maps</option>
+                <option value="kakao">Kakao Maps</option>
+                <option value="yandex">Yandex Maps</option>
+                <option value="mapycz">Mapy.cz</option>
+            </select>
+        </div>
+        <div class="layout-toggle">
+            <button id="layout-toggle-btn" class="vertical" title="Toggle layout">Horizontal Layout</button>
+        </div>
     </div>
 
-    <div class="container">
+    <div class="container vertical" id="main-container">
         <div id="map-container"></div>
         <div id="street-view-container"></div>
     </div>
     
     <div id="location-info"></div>
 
-    <!-- Load Google Maps API -->
+    <!-- Load all the APIs as before -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0"></script>
-    
-    <!-- Load Kakao Maps API -->
     <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=bb6dae98d7940acbb68719b7d0a00d14"></script>
-    
-    <!-- Load Yandex Maps API -->
     <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US" type="text/javascript"></script>
-    
-    <!-- Load Leaflet for Mapy.cz -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     
-    <!-- Load Mapy.cz Panorama API with API key -->
     <script>
-        // Initialize Mapy.cz API with the key
         window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
     </script>
     <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
     
-    <!-- Load our application -->
     <script type="module" src="dist/index.js"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const streetViewContainer = document.getElementById('street-view-container');
+            const mainContainer = document.getElementById('main-container');
+            const layoutToggleBtn = document.getElementById('layout-toggle-btn');
             
+            // Layout toggle functionality
+            let isHorizontal = false;
+            
+            layoutToggleBtn.addEventListener('click', function() {
+                isHorizontal = !isHorizontal;
+                
+                if (isHorizontal) {
+                    mainContainer.classList.remove('vertical');
+                    mainContainer.classList.add('horizontal');
+                    layoutToggleBtn.classList.remove('vertical');
+                    layoutToggleBtn.classList.add('horizontal');
+                    layoutToggleBtn.textContent = 'Vertical Layout';
+                } else {
+                    mainContainer.classList.remove('horizontal');
+                    mainContainer.classList.add('vertical');
+                    layoutToggleBtn.classList.remove('horizontal');
+                    layoutToggleBtn.classList.add('vertical');
+                    layoutToggleBtn.textContent = 'Horizontal Layout';
+                }
+                
+                // Trigger resize events for all map providers
+                window.dispatchEvent(new Event('resize'));
+                
+                // Additional resize triggers for specific providers
+                if (window.activeProvider) {
+                    switch (window.activeProvider) {
+                        case 'google':
+                            if (window.googleMap) {
+                                google.maps.event.trigger(window.googleMap, 'resize');
+                            }
+                            break;
+                        case 'kakao':
+                            if (window.kakaoMap) {
+                                window.kakaoMap.relayout();
+                            }
+                            break;
+                        case 'yandex':
+                            if (window.yandexMap) {
+                                window.yandexMap.container.fitToViewport();
+                            }
+                            break;
+                        case 'mapycz':
+                            if (window.mapyczMap) {
+                                window.mapyczMap.invalidateSize();
+                            }
+                            break;
+                    }
+                }
+            });
+            
+            // Existing street view container code
             if (streetViewContainer) {
-                // Monitor wheel events for debugging
                 streetViewContainer.addEventListener('wheel', function(e) {
                     console.log('Wheel event detected on street-view-container');
                     
-                    // Visual indicator that wheel events are being detected
                     streetViewContainer.classList.add('wheel-active');
                     setTimeout(() => {
                         streetViewContainer.classList.remove('wheel-active');
                     }, 300);
                 });
                 
-                // Add class for CSS targeting
                 streetViewContainer.classList.add('panorama-container');
-                
                 console.log('Street view container wheel event monitor initialized');
             }
             
-            // Check for any elements that might be capturing events globally
+            // Existing event tracking code
             document.body.addEventListener('wheel', function(e) {
                 const target = e.target;
-                // Check if the wheel event originated outside our panorama but might affect it
                 if (!streetViewContainer.contains(target)) {
                     console.log('Wheel event outside panorama detected on:', target);
                 }
-            }, true); // Use capture phase to see events before they reach targets
+            }, true);
             
-            // Track shift key for panorama interaction
             document.addEventListener('keydown', function(e) {
                 if (e.shiftKey) {
                     document.body.classList.add('shift-active');

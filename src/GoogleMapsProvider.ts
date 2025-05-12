@@ -7,7 +7,7 @@ export class GoogleMapsProvider implements IMapProvider {
     private coveragePolygon: google.maps.Polygon | null = null;
     private streetViewChangeCallback: ((position: LatLng, heading: number, pitch: number) => void) | null = null;
 
-    public initializeMap(containerId: string, options: MapOptions): void {
+    public async initializeMap(containerId: string, options: MapOptions): Promise<void> {
         const mapOptions: google.maps.MapOptions = {
             center: new google.maps.LatLng(options.center.lat, options.center.lng),
             zoom: options.zoom,
@@ -17,14 +17,14 @@ export class GoogleMapsProvider implements IMapProvider {
         this.map = new google.maps.Map(document.getElementById(containerId)!, mapOptions);
     }
 
-    public initializeStreetView(containerId: string, options: StreetViewOptions): void {
+    public async initializeStreetView(containerId: string, options: StreetViewOptions): Promise<void> {
         const streetViewOptions: any = {
             position: new google.maps.LatLng(options.position.lat, options.position.lng),
             pov: {
                 heading: options.pov.heading,
                 pitch: options.pov.pitch
             },
-            addressControl: true,
+           addressControl: true,
             enableCloseButton: true,
             linksControl: true,
             panControl: true,

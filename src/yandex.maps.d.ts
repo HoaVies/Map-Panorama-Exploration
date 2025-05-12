@@ -4,27 +4,14 @@ declare namespace ymaps {
     function require(modules: string[], callback: Function): void;
   }
   
-  class Layer {
-    constructor(tileUrlTemplate: string, options?: any);
-    options: any;
-  }
-
-  interface GeoObject {
-    geometry: any;
-    properties: any;
-    options: any;
-    events: EventManager;
-  }
-
   class Map {
     constructor(element: HTMLElement | string, options: MapOptions);
     events: EventManager;
     geoObjects: GeoObjectCollection;
     panorama?: panorama.Manager;
-
     container: { 
         getElement(): HTMLElement;
-        getSize(): number[];
+        getSize(): number[]; // Add this method
     };
 
     setCenter(center: number[], zoom?: number, options?: any): void;
@@ -36,37 +23,16 @@ declare namespace ymaps {
     destroy(): void;
     behaviors: any;
     getPanoramaManager(): Promise<panorama.Manager>;
-    getPanoramaManager(): Promise<panorama.Manager>;
     relayout(): void;
     getBounds(): number[][];
 }
-}
-  namespace event {
-    function preventMap(): void;
-  }
   interface MapOptions {
     center: number[];
     zoom: number;
     controls?: string[];
     type?: string;
-    suppressMapOpenBlock?: boolean; // Add this property to fix the error
+    suppressMapOpenBlock?: boolean;
   }
-  namespace control {
-    class Button {
-        constructor(options: any);
-        events: EventManager;
-        select(): void;
-        deselect(): void;
-        isSelected(): boolean;
-        data: {
-            get(key: string): any;
-            set(key: string, value: any): void;
-        };
-        options: {
-            set(key: string, value: any): void;
-        };
-    }
-}
   class Placemark {
     constructor(geometry: number[], properties?: PlacemarkProperties, options?: PlacemarkOptions);
     geometry: { 

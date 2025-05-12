@@ -2,6 +2,7 @@ import { Map } from './Map.js';
 import { GoogleMapsProvider } from './GoogleMapsProvider.js';
 import { KakaoMapsProvider } from './KakaoMapsProvider.js';
 import { YandexMapsProvider } from './YandexMapsProvider.js';
+import { MapyCzProvider } from './MapyCzProvider.js';
 import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvider.js';
 import { CoordinateTranslator } from './CoordinateTranslator.js';
 import { StreetViewFinder } from './StreetViewFinder.js';
@@ -24,7 +25,7 @@ const streetViewOptions: StreetViewOptions = {
 // Create map providers
 let currentProvider: IMapProvider;
 let map: Map;
-let currentProviderType: 'google' | 'kakao' | 'yandex' = 'google';
+let currentProviderType: 'google' | 'kakao' | 'yandex' | 'mapycz' = 'google';
 let currentState = {
     position: { lat: 37.5665, lng: 126.9780 },
     heading: 0,
@@ -34,113 +35,134 @@ let currentState = {
     isCoverageVisible: false
 };
 
+// Track provider switch in progress to prevent multiple simultaneous switches
+let providerSwitchInProgress = false;
+
 // Function to initialize a map provider with synchronized position
 /**
  * This function updates the handling of the isCoverageVisible state when switching providers.
  * It's particularly focused on Kakao which has a different coverage behavior.
  */
-async function initializeMap(providerType: 'google' | 'kakao' | 'yandex') {
-    console.log(`Initializing ${providerType} Maps provider`);
-    
-    // Store current state if map exists
-    let wasPanoramaVisible = false;
-    if (map) {
-        currentState = map.getCurrentState();
-        console.log('Preserving current state:', currentState);
-        
-        // Check if we're coming from a provider with an active panorama
-        const panoramaElement = document.getElementById('street-view-container');
-        if (panoramaElement) {
-            wasPanoramaVisible = panoramaElement.style.display !== 'none';
-            console.log('Panorama was visible:', wasPanoramaVisible);
-        }
+async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapycz') {
+    // Prevent multiple provider switches happening at the same time
+    if (providerSwitchInProgress) {
+        console.log('Provider switch already in progress, ignoring request');
+        return;
     }
     
-    // Clear existing map containers
-    const mapContainer = document.getElementById('map-container');
-    const streetViewContainer = document.getElementById('street-view-container');
-    
-    if (mapContainer) {
-        mapContainer.innerHTML = '';
-    }
-    
-    if (streetViewContainer) {
-        streetViewContainer.innerHTML = '';
-        // Reset the display property to ensure proper initialization
-        streetViewContainer.style.display = 'block';
-    }
+    providerSwitchInProgress = true;
     
     try {
-        // Translate the coordinates from current provider to new provider
-        const translatedPosition = CoordinateTranslator.translateCoordinates(
-            currentState.position,
-            currentProviderType,
-            providerType
-        );
+        console.log(`Initializing ${providerType} Maps provider`);
         
-        // Find the nearest street view position in the new provider
-        let streetViewPosition = translatedPosition;
+        // Store current state if map exists
+        let wasPanoramaVisible = false;
+        if (map) {
+            currentState = map.getCurrentState();
+            console.log('Preserving current state:', currentState);
+            
+            // Check if we're coming from a provider with an active panorama
+            const panoramaElement = document.getElementById('street-view-container');
+            if (panoramaElement) {
+                wasPanoramaVisible = panoramaElement.style.display !== 'none';
+                console.log('Panorama was visible:', wasPanoramaVisible);
+            }
+            
+            // Perform provider-specific cleanup
+            await cleanupCurrentProvider();
+        }
+        
+        // Clear existing map containers with sufficient delay
+        const mapContainer = document.getElementById('map-container');
+        const streetViewContainer = document.getElementById('street-view-container');
+        
+        if (mapContainer) {
+            mapContainer.innerHTML = '';
+        }
+        
+        if (streetViewContainer) {
+            streetViewContainer.innerHTML = '';
+            // Reset the display property to ensure proper initialization
+            streetViewContainer.style.display = 'block';
+        }
+        
+        // Add delay after clearing containers before initializing new provider
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         try {
-            const nearestPosition = await StreetViewFinder.findNearestStreetViewPosition(
-                translatedPosition,
+            // Translate the coordinates from current provider to new provider
+            const translatedPosition = CoordinateTranslator.translateCoordinates(
+                currentState.position,
+                currentProviderType,
                 providerType
             );
             
-            if (nearestPosition) {
-                streetViewPosition = nearestPosition;
-                console.log('Found nearest street view position:', streetViewPosition);
+            // Find the nearest street view position in the new provider
+            let streetViewPosition = translatedPosition;
+            try {
+                const nearestPosition = await StreetViewFinder.findNearestStreetViewPosition(
+                    translatedPosition,
+                    providerType
+                );
+                
+                if (nearestPosition) {
+                    streetViewPosition = nearestPosition;
+                    console.log('Found nearest street view position:', streetViewPosition);
+                }
+            } catch (error) {
+                console.warn('Could not find nearest street view position:', error);
+                // Fall back to the translated position
             }
-        } catch (error) {
-            console.warn('Could not find nearest street view position:', error);
-            // Fall back to the translated position
-        }
-        
-        // Create the selected map provider
-        if (providerType === 'google') {
-            // Use the fixed GoogleMapsProvider
-            currentProvider = new GoogleMapsProvider();
-            console.log('Initializing Google provider with fixed POV tracking');
-        } else if (providerType === 'yandex'){
-            currentProvider = new YandexMapsProvider();
-        } else {
-            // Use the fixed KakaoMapsProvider
-            currentProvider = new KakaoMapsProvider();
-            console.log('Initializing Kakao provider with fixed heading/pitch handling');
-        }
-        
-        // Make sure we have appropriate logging to track what's happening
-        console.log(`Current state before provider initialization:`, JSON.stringify({
-            position: currentState.position,
-            heading: currentState.heading,
-            pitch: currentState.pitch
-        }));
-
-        // Update current provider type
-        currentProviderType = providerType;
-
-        // Update options with translated/nearest position
-        const updatedMapOptions: MapOptions = {
-            center: translatedPosition, // Center the map on the translated position
-            zoom: currentState.zoom,
-            mapTypeId: currentState.mapTypeId
-        };
-        
-        const updatedStreetViewOptions: StreetViewOptions = {
-            position: streetViewPosition, // Use the nearest street view position
-            pov: {
+            
+            // Create the selected map provider
+            if (providerType === 'google') {
+                // Use the fixed GoogleMapsProvider
+                currentProvider = new GoogleMapsProvider();
+                console.log('Initializing Google provider with fixed POV tracking');
+            } else if (providerType === 'yandex'){
+                currentProvider = new YandexMapsProvider();
+            } else if (providerType === 'mapycz') {
+                currentProvider = new MapyCzProvider();
+                console.log('Initializing Mapy.cz provider');
+            } else {
+                // Use the fixed KakaoMapsProvider
+                currentProvider = new KakaoMapsProvider();
+                console.log('Initializing Kakao provider with fixed heading/pitch handling');
+            }
+            
+            // Make sure we have appropriate logging to track what's happening
+            console.log(`Current state before provider initialization:`, JSON.stringify({
+                position: currentState.position,
                 heading: currentState.heading,
                 pitch: currentState.pitch
-            }
-        };
+            }));
 
-        // Create a new map instance with the provider and preserved state
-        map = new Map(
-            currentProvider,
-            'map-container',
-            'street-view-container',
-            updatedMapOptions,
-            updatedStreetViewOptions
-        );
+            // Update current provider type
+            currentProviderType = providerType;
+
+            // Update options with translated/nearest position
+            const updatedMapOptions: MapOptions = {
+                center: translatedPosition, // Center the map on the translated position
+                zoom: currentState.zoom,
+                mapTypeId: currentState.mapTypeId
+            };
+            
+            const updatedStreetViewOptions: StreetViewOptions = {
+                position: streetViewPosition, // Use the nearest street view position
+                pov: {
+                    heading: currentState.heading,
+                    pitch: currentState.pitch
+                }
+            };
+
+            // Create a new map instance with the provider and preserved state
+            map = new Map(
+                currentProvider,
+                'map-container',
+                'street-view-container',
+                updatedMapOptions,
+                updatedStreetViewOptions
+            );
 
             // Initialize the map
             map.initialize();
@@ -340,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (providerSelector) {
         providerSelector.addEventListener('change', () => {
-            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex';
+            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex' | 'mapycz';
             console.log(`Provider changed to: ${selectedProvider}`);
             initializeMap(selectedProvider);
         });

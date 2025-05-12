@@ -36,8 +36,10 @@ declare namespace ymaps {
     destroy(): void;
     behaviors: any;
     getPanoramaManager(): Promise<panorama.Manager>;
+    getPanoramaManager(): Promise<panorama.Manager>;
     relayout(): void;
     getBounds(): number[][];
+}
 }
   namespace event {
     function preventMap(): void;

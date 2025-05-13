@@ -125,7 +125,7 @@ export class Map {
     private updateLocationInfo(position: LatLng): void {
         const infoElement = document.getElementById('location-info');
         if (infoElement) {
-            infoElement.innerHTML = `Lat: ${position.lat.toFixed(6)}, Lng: ${position.lng.toFixed(6)}`;
+            // infoElement.innerHTML = `Lat: ${position.lat.toFixed(6)}, Lng: ${position.lng.toFixed(6)}`;
             infoElement.style.display = 'block';
             
             // For simplicity, we'll just position it at the top-right of the map

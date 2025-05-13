@@ -776,6 +776,7 @@ export class KakaoMapsProvider implements IMapProvider {
                     lng: latlng.getLng()
                 };
                 
+                // Always call the map click callback
                 if (this.mapClickCallback && latlng) {
                     this.mapClickCallback({
                         lat: latlng.getLat(),

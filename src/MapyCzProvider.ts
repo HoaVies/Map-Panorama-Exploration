@@ -21,6 +21,7 @@ export class MapyCzProvider implements IMapProvider {
     private currentMapType: string = 'roadmap';
     private baseTileLayer: any = null;
     private namesOverlayLayer: any = null;
+    private popupObserver: MutationObserver | null = null;
 
     constructor(apiKey?: string) {
         if (apiKey) {
@@ -30,10 +31,71 @@ export class MapyCzProvider implements IMapProvider {
         // Install global error handler for panorama issues
         this.installGlobalErrorHandler();
         
-        // Load Leaflet if not already loaded
+        // Load Leaflet
         this.loadLeaflet(() => {
             console.log('Leaflet loaded successfully');
             this.initializePegmanIcon();
+        });
+        
+        // Set up popup observer to automatically dismiss popups
+        this.setupPopupObserver();
+        
+        // Global CSS to suppress Mapy.cz popups
+        this.addGlobalPopupSuppressingCSS();
+    }
+    
+    // Inject CSS that hides popups
+    private addGlobalPopupSuppressingCSS(): void {
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .popup-holder, .popup-background, .message-box { 
+                display: none !important; 
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    private showError(message: string): void {
+        const container = document.getElementById('street-view-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="display:flex;justify-content:center;align-items:center;height:100%;background:#f5f5f5;flex-direction:column;">
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    }
+    
+    private setupPopupObserver(): void {
+        // Observer to detect and remove popup dialogs
+        this.popupObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                    for (let i = 0; i < mutation.addedNodes.length; i++) {
+                        const node = mutation.addedNodes[i] as HTMLElement;
+                        // Check for various popup classes and types
+                        if (node.nodeType === Node.ELEMENT_NODE && 
+                            (node.classList?.contains('popup-holder') || 
+                             node.classList?.contains('message-box') ||
+                             node.classList?.contains('popup-background') ||
+                             node.querySelector?.('.popup-holder, .message-box, .popup-background'))) {
+                            console.log('Auto-dismissing panorama popup dialog');
+                            node.remove();
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Start observing the body for popups
+        this.popupObserver.observe(document.body, { 
+            childList: true, 
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style']
         });
     }
     
@@ -49,11 +111,15 @@ export class MapyCzProvider implements IMapProvider {
                 console.warn('Caught panorama error, preventing propagation:', message);
                 // Attempt to recover
                 this.recoverFromError();
+                
+                // Also check and remove any popup dialogs
+                this.removeExistingPopups();
+                
                 // Prevent the error from propagating
                 return true;
             }
             
-            // Call original error handler if it exists
+            // Call original error handler
             if (originalErrorHandler) {
                 return originalErrorHandler(message, source, lineno, colno, error);
             }
@@ -68,10 +134,20 @@ export class MapyCzProvider implements IMapProvider {
                 console.warn('Caught unhandled panorama promise rejection:', event.reason);
                 event.preventDefault();
                 this.recoverFromError();
+                this.removeExistingPopups();
             }
         });
         
         this.errorHandlerInstalled = true;
+    }
+    
+    private removeExistingPopups(): void {
+        // Immediately find and remove any existing popup-holder elements
+        const popups = document.querySelectorAll('.popup-holder');
+        if (popups.length > 0) {
+            console.log(`Removing ${popups.length} existing popup(s)`);
+            popups.forEach(popup => popup.remove());
+        }
     }
     
     private recoverFromError(): void {
@@ -80,7 +156,7 @@ export class MapyCzProvider implements IMapProvider {
         // Clear the current panorama instance
         this.panoramaInstance = null;
         
-        // Try to reinitialize if we have a position
+        // Reinitialize if we have a position
         if (this.currentPosition) {
             setTimeout(() => {
                 this.initializePanorama(this.currentPosition!);
@@ -108,10 +184,9 @@ export class MapyCzProvider implements IMapProvider {
                         });
                     }
                 } catch (e) {
-                    // Ignore errors in activity simulation
                 }
             }
-        }, 30000); // Every 30 seconds
+        }, 30000);
     }
     
     private initializePegmanIcon(): void {
@@ -192,6 +267,9 @@ export class MapyCzProvider implements IMapProvider {
         if (window.Panorama) {
             const originalPanoramaFromPosition = window.Panorama.panoramaFromPosition;
             window.Panorama.panoramaFromPosition = async function(opts: any) {
+                opts.hidePopups = true;
+                opts.hideErrors = true;
+                
                 try {
                     const result = await originalPanoramaFromPosition.call(window.Panorama, opts);
                     
@@ -213,6 +291,17 @@ export class MapyCzProvider implements IMapProvider {
                     throw e;
                 }
             };
+            
+            // Patch the global Panorama object to prevent popups
+            if (typeof window.Panorama._hideAllPopups !== 'function') {
+                window.Panorama._hideAllPopups = function() {
+                    const popups = document.querySelectorAll('.popup-holder');
+                    popups.forEach(popup => popup.remove());
+                };
+                
+                // Call it periodically
+                setInterval(window.Panorama._hideAllPopups, 1000);
+            }
         }
     }
 
@@ -229,7 +318,7 @@ export class MapyCzProvider implements IMapProvider {
                 return;
             }
             
-            // Clean up existing map instance if it exists
+            // Clean up existing map instance
             if (this.map) {
                 console.log('Removing existing map instance');
                 this.map.off(); 
@@ -261,7 +350,6 @@ export class MapyCzProvider implements IMapProvider {
             logoContainer.style.zIndex = '1000';
             container.appendChild(logoContainer);
 
-            // Map type control
             this.addMapTypeControl();
 
             // Click listener to the map
@@ -290,7 +378,7 @@ export class MapyCzProvider implements IMapProvider {
                 this.setStreetViewPosition(position);
             });
 
-            // Place initial marker at start position if provided
+            // Place initial marker at start position
             if (this.currentPosition) {
                 this.clickMarker = L.marker(
                     [this.currentPosition.lat, this.currentPosition.lng]
@@ -299,7 +387,7 @@ export class MapyCzProvider implements IMapProvider {
         });
     }
 
-    // Add a new method to create and add map type control
+    // Create and add map type control
     private addMapTypeControl(): void {
         if (!this.map) return;
         
@@ -379,7 +467,6 @@ export class MapyCzProvider implements IMapProvider {
             this.namesOverlayLayer = null;
         }
         
-        // Tile layer based on map type
         if (mapTypeId === 'hybrid') {
             // Satellite imagery base layer
             this.baseTileLayer = L.tileLayer(
@@ -393,7 +480,7 @@ export class MapyCzProvider implements IMapProvider {
                 }
             ).addTo(this.map);
             
-            // Add names overlay layer on top of satellite imagery
+            // Names overlay layer
             this.namesOverlayLayer = L.tileLayer(
                 `https://api.mapy.cz/v1/maptiles/names-overlay/256/{z}/{x}/{y}?apikey=${this.apiKey}`,
                 {
@@ -453,6 +540,9 @@ export class MapyCzProvider implements IMapProvider {
             return;
         }
 
+        // Clean up any existing popups before initializing
+        this.removeExistingPopups();
+
         // Promise to track initialization
         this.initializationPromise = new Promise<void>(async (resolve) => {
             try {
@@ -483,12 +573,14 @@ export class MapyCzProvider implements IMapProvider {
                         pitch: this.currentPitch * (Math.PI / 180),
                         showNavigation: true,
                         lang: 'en',
-                        hideErrors: true
+                        hideErrors: true,
+                        hidePopups: true
                     });
 
                     if (result.errorCode && result.errorCode !== 'NONE') {
                         console.warn(`Panorama error: ${result.errorCode} - ${result.error}`);
                         this.showError(result.error || result.errorCode);
+                        this.removeExistingPopups(); // Remove any popups that might appear
                         resolve();
                         return;
                     }
@@ -497,20 +589,19 @@ export class MapyCzProvider implements IMapProvider {
                     this.panoramaInstance = result;
                     this.isDestroying = false;
                     
-                    // Start activity simulation to prevent inactivity
-                    this.setupActivitySimulation();
-                    
                     // Set up event listeners
                     this.setupPanoramaEventListeners();
                     
-                    resolve();
+                    this.setupActivitySimulation();
                 } catch (error) {
                     console.error('Failed to initialize panorama:', error);
                     this.showError('Failed to load panorama');
+                    this.removeExistingPopups();
                     resolve();
                 }
             } catch (error) {
                 console.error('Failed to initialize panorama:', error);
+                this.removeExistingPopups();
                 resolve();
             } finally {
                 this.initializationPromise = null;
@@ -520,24 +611,7 @@ export class MapyCzProvider implements IMapProvider {
         return this.initializationPromise;
     }
 
-    private showError(message: string): void {
-        const container = document.getElementById('street-view-container');
-        if (container) {
-            container.innerHTML = `
-                <div style="display:flex;justify-content:center;align-items:center;height:100%;background:#f5f5f5;flex-direction:column;">
-                    <p>${message}</p>
-                </div>
-            `;
-        }
-    }
-    
-    public async destroyPanorama(): Promise<void> {
-        // Clear activity simulation
-        if (this.activityInterval) {
-            clearInterval(this.activityInterval);
-            this.activityInterval = null;
-        }
-        
+    private async destroyPanorama(): Promise<void> {
         // Prevent concurrent destruction
         if (this.isDestroying) {
             console.log('Panorama destruction already in progress');
@@ -561,7 +635,7 @@ export class MapyCzProvider implements IMapProvider {
         // Destroy panorama instance
         if (this.panoramaInstance) {
             try {
-                // First remove all event listeners to prevent callbacks
+                // Remove all event listeners to prevent callbacks
                 if (typeof this.panoramaInstance.removeListener === 'function') {
                     try {
                         this.panoramaInstance.removeListener('pano-view');
@@ -571,7 +645,7 @@ export class MapyCzProvider implements IMapProvider {
                     }
                 }
                 
-                // Now destroy the panorama itself - with error handling
+                // Destroy the panorama itself - with error handling
                 if (typeof this.panoramaInstance.destroy === 'function') {
                     try {
                         this.panoramaInstance.destroy();
@@ -584,10 +658,10 @@ export class MapyCzProvider implements IMapProvider {
                 console.warn('Error during panorama cleanup:', e);
             }
             
-            // Always null the reference even if errors occurred
+            // Always null the reference
             this.panoramaInstance = null;
         }
-
+        
         // Clear the panorama container
         if (this.panoramaContainer && this.panoramaContainer.parentNode) {
             this.panoramaContainer.parentNode.removeChild(this.panoramaContainer);
@@ -618,7 +692,6 @@ export class MapyCzProvider implements IMapProvider {
                 if (this.streetViewChangeCallback && this.currentPosition) {
                     // Use debouncing to reduce callback frequency
                     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-                    
                     this.debounceTimer = setTimeout(() => {
                         this.streetViewChangeCallback!(
                             this.currentPosition!,
@@ -720,9 +793,9 @@ export class MapyCzProvider implements IMapProvider {
         this.initializePanorama(position);
     }
 
-    // Method to get the current position - always returns the most up-to-date position
+    // Get the current position
     public getCurrentPosition(): LatLng {
-        // If we have a panorama instance with info, use that as the most authoritative source
+        // If we have a panorama instance with info
         if (this.panoramaInstance && this.panoramaInstance.info) {
             return {
                 lat: this.panoramaInstance.info.lat,
@@ -778,7 +851,7 @@ export class MapyCzProvider implements IMapProvider {
                     const camera = this.panoramaInstance.getCamera();
                     if (!camera) return;
                     
-                    // Check if POV is close to what we wanted
+                    // Check if POV is close
                     const currentHeading = camera.yaw * (180 / Math.PI);
                     const currentPitch = camera.pitch * (180 / Math.PI);
                     
@@ -821,7 +894,7 @@ export class MapyCzProvider implements IMapProvider {
         this.currentHeading = heading;
         this.currentPitch = pitch;
         
-        // Update the panorama if it's initialized
+        // Update the panorama
         if (this.panoramaInstance) {
             console.log(`Setting POV: heading=${heading}, pitch=${pitch}`);
             this.applyPov(heading, pitch);
@@ -839,7 +912,7 @@ export class MapyCzProvider implements IMapProvider {
         // Store the position
         this.currentPosition = position;
         
-        // Update marker on map
+        // Update marker
         if (this.map) {
             try {
                 if (!this.clickMarker) {
@@ -853,7 +926,6 @@ export class MapyCzProvider implements IMapProvider {
                             this.map.removeLayer(this.clickMarker);
                         }
                     } catch (e) {
-                        // Ignore errors if marker wasn't on map
                     }
                     
                     // Create new marker with custom icon
@@ -921,6 +993,12 @@ export class MapyCzProvider implements IMapProvider {
         if (this.activityInterval) {
             clearInterval(this.activityInterval);
             this.activityInterval = null;
+        }
+        
+        // Clean up popup observer
+        if (this.popupObserver) {
+            this.popupObserver.disconnect();
+            this.popupObserver = null;
         }
         
         // Clean up panorama

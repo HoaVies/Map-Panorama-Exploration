@@ -703,32 +703,8 @@ public showCoverage(position?: LatLng): void {
             console.warn('Error setting panorama direction:', e);
         }
         
-        // Set up a retry
-        let attempts = 0;
-        this.pendingPovInterval = setInterval(() => {
-            if (!this.panoramaPlayer) {
-                clearInterval(this.pendingPovInterval);
-                this.pendingPovInterval = null;
-                return;
-            }
-            
-            try {
-                const currentDirection = this.panoramaPlayer.getDirection();
-                const headingDiff = Math.abs(currentDirection[0] - this.pendingHeading!);
-                const pitchDiff = Math.abs(currentDirection[1] - this.pendingPitch!);
-                
-                if (headingDiff < 2 && pitchDiff < 2 || attempts >= 5) {
-                    clearInterval(this.pendingPovInterval);
-                    this.pendingPovInterval = null;
-                    return;
-                }
-                
-                this.panoramaPlayer.setDirection([this.pendingHeading!, this.pendingPitch!]);
-                attempts++;
-            } catch (e) {
-                clearInterval(this.pendingPovInterval);
-                this.pendingPovInterval = null;
-            }
-        }, 300);
+        // Clear pending values so they don't get reapplied during normal navigation
+        this.pendingHeading = null;
+        this.pendingPitch = null;
     }
 }

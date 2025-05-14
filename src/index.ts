@@ -68,7 +68,6 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                 console.log('Panorama was visible:', wasPanoramaVisible);
             }
             
-            // Perform provider-specific cleanup
             await cleanupCurrentProvider();
         }
         
@@ -82,7 +81,7 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
         
         if (streetViewContainer) {
             streetViewContainer.innerHTML = '';
-            // Reset the display property to ensure proper initialization
+            // Reset the display property
             streetViewContainer.style.display = 'block';
         }
         
@@ -126,11 +125,11 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                 console.log('Initializing Mapy.cz provider');
             } else {
                 // Use the fixed KakaoMapsProvider
-                currentProvider = new KakaoMapsProvider();
-                console.log('Initializing Kakao provider with fixed heading/pitch handling');
+                currentProvider = new YandexMapsProvider();
+                console.log('Initializing Yandex provider with fixed heading/pitch handling');
             }
             
-            // Make sure we have appropriate logging to track what's happening
+            // Logging to track what's happening
             console.log(`Current state before provider initialization:`, JSON.stringify({
                 position: currentState.position,
                 heading: currentState.heading,
@@ -142,7 +141,7 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
 
             // Update options with translated/nearest position
             const updatedMapOptions: MapOptions = {
-                center: translatedPosition, // Center the map on the translated position
+                center: translatedPosition,
                 zoom: currentState.zoom,
                 mapTypeId: currentState.mapTypeId
             };
@@ -179,7 +178,6 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
             if (currentState.isCoverageVisible) {
                 if (providerType === 'kakao') {
                     // For Kakao, we need to manually toggle the coverage overlay
-                    // by simulating a click on the roadview control
                     setTimeout(() => {
                         const roadviewControl = document.getElementById('roadviewControl');
                         if (roadviewControl) {
@@ -190,7 +188,6 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                         }
                     }, 800);
                 } else {
-                    // For other providers, use the standard method with a delay
                     setTimeout(() => {
                         map.showCoverage(translatedPosition);
                     }, 800);
@@ -298,40 +295,73 @@ async function cleanupCurrentProvider(): Promise<void> {
     console.log(`Cleaning up ${currentProviderType} provider`);
     
     try {
-        // Perform provider-specific cleanup
-        if (currentProviderType === 'mapycz') {
+        // Special handling for Kakao provider
+        if (currentProviderType === 'kakao') {
+            const roadviewControl = document.getElementById('roadviewControl');
+            if (roadviewControl && roadviewControl.parentNode) {
+                roadviewControl.parentNode.removeChild(roadviewControl);
+            }
+            
+            const mapTypeControl = document.getElementById('mapTypeControl');
+            if (mapTypeControl && mapTypeControl.parentNode) {
+                mapTypeControl.parentNode.removeChild(mapTypeControl);
+            }
+            
+            // Force cleanup of Kakao roadview
+            const kakaoProvider = currentProvider as KakaoMapsProvider;
+            try {
+                kakaoProvider.setPegmanVisible(false);
+            } catch (e) {
+                console.warn('Error hiding Kakao roadview:', e);
+            }
+        }
+        
+        // Regular cleanup for MapyCz provider
+        else if (currentProviderType === 'mapycz') {
             const mapyCzProvider = currentProvider as any;
             if (typeof mapyCzProvider.cleanup === 'function') {
-                mapyCzProvider.cleanup();
+                await mapyCzProvider.cleanup();
                 console.log('Cleaned up Mapy.cz provider');
             } else if (typeof mapyCzProvider.destroyPanorama === 'function') {
-                mapyCzProvider.destroyPanorama();
+                await mapyCzProvider.destroyPanorama();
                 console.log('Destroyed Mapy.cz panorama');
             }
+        }
+        
+        // For other providers, use the cleanup method if available
+        try {
+            if (typeof (currentProvider as any).cleanup === 'function') {
+                await (currentProvider as any).cleanup();
+                console.log(`Cleaned up ${currentProviderType} provider`);
+            }
+        } catch (e) {
+            console.warn(`Error cleaning up ${currentProviderType} provider:`, e);
+        }
+        
+        // DOM cleanup by recreating the containers
+        const mapContainer = document.getElementById('map-container');
+        const streetViewContainer = document.getElementById('street-view-container');
+        
+        if (mapContainer) {
+            const newMapContainer = mapContainer.cloneNode(false);
+            if (mapContainer.parentNode) {
+                mapContainer.parentNode.replaceChild(newMapContainer, mapContainer);
+            }
+        }
+        
+        if (streetViewContainer) {
+            const newStreetViewContainer = streetViewContainer.cloneNode(false);
+            if (streetViewContainer.parentNode) {
+                streetViewContainer.parentNode.replaceChild(newStreetViewContainer, streetViewContainer);
+            }
+        }
+        
+        // Delay to ensure cleanup is complete
+        if (currentProviderType === 'kakao' && arguments[0] === 'mapycz') {
+            await new Promise(resolve => setTimeout(resolve, 1000));
         } else {
-            // For other providers, try to use the cleanup method if available
-            try {
-                if (typeof (currentProvider as any).cleanup === 'function') {
-                    (currentProvider as any).cleanup();
-                    console.log(`Cleaned up ${currentProviderType} provider`);
-                }
-            } catch (e) {
-                console.warn(`Error cleaning up ${currentProviderType} provider:`, e);
-            }
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
-        
-        // Force a DOM cleanup for the panorama
-        const container = document.getElementById('street-view-container');
-        if (container) {
-            // Clear all contents and event listeners
-            const oldContainer = container.cloneNode(false);
-            if (container.parentNode) {
-                container.parentNode.replaceChild(oldContainer, container);
-            }
-        }
-        
-        // Force a delay to ensure cleanup is complete
-        await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
         console.warn('Error during provider cleanup:', error);
     }
@@ -395,37 +425,3 @@ document.addEventListener('contextmenu', (event) => {
         // Handle quick drop functionality
     }
 });
-
-// Add type definitions for global objects
-declare global {
-    interface Window {
-        google?: {
-            maps?: {
-                StreetViewService?: any;
-                StreetViewStatus?: {
-                    OK: string;
-                };
-                StreetViewPreference?: {
-                    NEAREST: string;
-                };
-                LatLng?: any;
-            };
-        };
-        kakao?: {
-            maps?: {
-                RoadviewClient?: any;
-                LatLng?: any;
-                Roadview?: any;
-                event?: {
-                    addListener: Function;
-                };
-            };
-        };
-        ymaps?: {
-            panorama?: {
-                locate: (point: number[]) => Promise<any[]>;
-                createPlayer: (container: HTMLElement | string, point: number[], options?: any) => Promise<any>;
-            };
-        };
-    }
-}

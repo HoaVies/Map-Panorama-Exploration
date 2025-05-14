@@ -39,11 +39,19 @@ interface PanoramaStatic {
     panoramaFromPosition(options: PanoramaOptions): Promise<PanoramaResult>;
     panoramaExists?(options: { lon: number; lat: number; apiKey: string; radius?: number }): Promise<any>;
 }
+
+// Define Xt interface used by Mapy.cz panorama
+interface XtObject {
+    restoreContext?: Function;
+    [key: string]: any; // Allow any other properties
+}
+
 declare global {
     interface Window {
         Panorama?: any;
         L?: any;
         currentMapProvider?: any;
+        Xt?: XtObject; // Add Xt object to window
     }
 }
 export {};

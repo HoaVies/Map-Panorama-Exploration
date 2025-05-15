@@ -24,12 +24,27 @@ export class KakaoMapsProvider implements IMapProvider {
     private coverageWarningElement: HTMLElement | null = null;
     private lastKnownValidPosition: LatLng | null = null;
 
-    public initializeMap(containerId: string, options: MapOptions): void {
-        const mapContainer = document.getElementById(containerId);
-        if (!mapContainer) {
-            console.error('Map container not found');
-            return;
-        }
+public initializeMap(containerId: string, options: MapOptions): void {
+    // Get map container first so it's available throughout the method
+    const mapContainer = document.getElementById(containerId);
+    if (!mapContainer) {
+        console.error('Map container element not found');
+        return;
+    }
+
+    // Safety check for Kakao Maps API
+    if (typeof window.kakao === 'undefined' || typeof window.kakao.maps === 'undefined') {
+        console.error('Kakao Maps API not properly loaded');
+        
+        // Show user-friendly error
+        mapContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px; background: #f8f9fa; height: 100%;">
+                <h3>Could not load Kakao Maps</h3>
+                <p>Please try refreshing the page or switch to another provider.</p>
+            </div>
+        `;
+        return;
+    }
 
         // Check if the initial position is within Kakao's coverage
         if (!this.isWithinKakaoCoverage(options.center)) {
@@ -68,6 +83,7 @@ export class KakaoMapsProvider implements IMapProvider {
         if (this.map) {
             this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         }
+        this.map = new kakao.maps.Map(mapContainer, mapOptions);
     }
 
     private createCoverageWarning(mapContainer: HTMLElement): void {

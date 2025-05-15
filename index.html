@@ -161,11 +161,45 @@
             pointer-events: auto !important;
             cursor: crosshair;
         }
+
+        /* Loading indicator */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     <!-- Leaflet CSS for Mapy.cz -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 <body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div style="margin-left: 15px;">Loading map APIs...</div>
+    </div>
+
     <div class="controls-container">
         <div class="provider-selector">
             <label>Map Provider:</label>
@@ -188,19 +222,165 @@
     
     <div id="location-info"></div>
 
-    <!-- Load all the APIs as before -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0"></script>
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=bb6dae98d7940acbb68719b7d0a00d14"></script>
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US" type="text/javascript"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    
+    <!-- API Loading and Tracking Script -->
     <script>
-        window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
+        // Create a global tracking object for API loading status
+        window.apiLoadStatus = {
+            google: false,
+            kakao: false,
+            yandex: false,
+            mapycz: false
+        };
+        
+        function initApp() {
+            // Check if all required APIs are loaded
+            if (window.apiLoadStatus.google && 
+                window.apiLoadStatus.kakao && 
+                window.apiLoadStatus.yandex && 
+                window.apiLoadStatus.mapycz) {
+                
+                console.log("All map APIs loaded successfully");
+                
+                // Hide loading overlay
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                }
+                
+                // Trigger the module loader
+                const event = new Event('apis_loaded');
+                document.dispatchEvent(event);
+            } else {
+                console.log("Waiting for APIs:", window.apiLoadStatus);
+            }
+        }
+        
+        // Google Maps callback
+        function googleMapsLoaded() {
+            console.log("Google Maps API loaded");
+            window.apiLoadStatus.google = true;
+            initApp();
+        }
+        
+        // Kakao Maps callback
+        function kakaoMapsLoaded() {
+            console.log("Kakao Maps API loaded");
+            window.apiLoadStatus.kakao = true;
+            initApp();
+        }
+        
+        // Yandex Maps callback
+        function yandexMapsLoaded() {
+            console.log("Yandex Maps API loaded");
+            window.apiLoadStatus.yandex = true;
+            initApp();
+        }
+        
+        // Mapy.cz callback
+        function mapyczLoaded() {
+            console.log("Mapy.cz API loaded");
+            window.apiLoadStatus.mapycz = true;
+            initApp();
+        }
+
+        // Set a timeout to catch any APIs that fail to load
+        setTimeout(() => {
+            // Check for any APIs that haven't loaded
+            const unloadedApis = [];
+            for (const [api, loaded] of Object.entries(window.apiLoadStatus)) {
+                if (!loaded) unloadedApis.push(api);
+            }
+            
+            if (unloadedApis.length > 0) {
+                console.warn(`Some APIs failed to load: ${unloadedApis.join(', ')}`);
+                console.warn("Attempting to continue anyway...");
+                
+                // Force all to true and try to continue
+                for (const api of unloadedApis) {
+                    window.apiLoadStatus[api] = true;
+                }
+                
+                // Try to initialize
+                initApp();
+            }
+        }, 10000); // 10 second timeout
     </script>
-    <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
+
+    <!-- Google Maps API with callback -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0&callback=googleMapsLoaded" async defer></script>
     
-    <script type="module" src="dist/index.js"></script>
-    
+    <!-- Kakao Maps API with explicit protocol -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=bb6dae98d7940acbb68719b7d0a00d14&autoload=false"></script>
+    <script>
+        // Loading sequence for Kakao Maps
+        function loadKakaoMaps() {
+            // Check if script has loaded and created global kakao object
+            if (typeof kakao === 'undefined') {
+                console.log('Waiting for Kakao Maps script to load...');
+                setTimeout(loadKakaoMaps, 200);
+                return;
+            }
+            
+            // Now initialize the API
+            try {
+                console.log('Kakao object found, initializing maps module...');
+                kakao.maps.load(function() {
+                    console.log('Kakao Maps API fully loaded and ready');
+                    window.apiLoadStatus.kakao = true;
+                    initApp();
+                });
+            } catch (e) {
+                console.error('Error initializing Kakao Maps:', e);
+                // Set as loaded anyway after multiple retries
+                let retryCount = 0;
+                const maxRetries = 3;
+                
+                function retryKakaoLoad() {
+                    if (retryCount >= maxRetries) {
+                        console.warn('Max retries reached for Kakao Maps, marking as loaded anyway');
+                        window.apiLoadStatus.kakao = true;
+                        initApp();
+                        return;
+                    }
+                    
+                    retryCount++;
+                    console.log(`Retry ${retryCount}/${maxRetries} loading Kakao Maps...`);
+                    setTimeout(() => {
+                        try {
+                            kakao.maps.load(function() {
+                                console.log('Kakao Maps API loaded on retry');
+                                window.apiLoadStatus.kakao = true;
+                                initApp();
+                            });
+                        } catch (e) {
+                            console.error('Error on retry:', e);
+                            retryKakaoLoad();
+                        }
+                    }, 500);
+                }
+                
+                retryKakaoLoad();
+            }
+        }
+        
+        // Start loading process
+        setTimeout(loadKakaoMaps, 500);
+    </script>
+        
+        <!-- Yandex Maps API with callback -->
+        <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US&onload=yandexMapsLoaded" type="text/javascript"></script>
+        
+        <!-- Leaflet for Mapy.cz -->
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" onload="mapyczLoaded()"></script>
+        
+        <script>
+            window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
+        </script>
+        <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
+        
+        <!-- Your application script -->
+        <script type="module" src="dist/index.js"></script>
+        
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const streetViewContainer = document.getElementById('street-view-container');

@@ -7,6 +7,21 @@ import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvi
 import { CoordinateTranslator } from './CoordinateTranslator.js';
 import { StreetViewFinder } from './StreetViewFinder.js';
 
+function waitForAPIs(): Promise<void> {
+    return new Promise((resolve) => {
+        if (window.apiLoadStatus && 
+            window.apiLoadStatus.google && 
+            window.apiLoadStatus.kakao && 
+            window.apiLoadStatus.yandex && 
+            window.apiLoadStatus.mapycz) {
+            resolve();
+        } else {
+            document.addEventListener('apis_loaded', () => resolve(), { once: true });
+        }
+    });
+}
+
+
 // Common map options (these are the default values, will be updated when switching providers)
 const mapOptions: MapOptions = {
     center: { lat: 37.5665, lng: 126.9780 }, // Seoul
@@ -368,8 +383,8 @@ async function cleanupCurrentProvider(): Promise<void> {
 }
 
 // Wait for the DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, setting up provider selector');
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM loaded, waiting for map APIs to load...');
     
     // Create a status element for sync notifications if it doesn't exist
     if (!document.getElementById('sync-status')) {
@@ -387,6 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
         statusElement.style.display = 'none';
         document.body.appendChild(statusElement);
     }
+    
+    // Wait for all APIs to be loaded
+    await waitForAPIs();
+    console.log('All map APIs loaded, setting up provider selector');
     
     const providerSelector = document.getElementById('provider-select') as HTMLSelectElement;
     

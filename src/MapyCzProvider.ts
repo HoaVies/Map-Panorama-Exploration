@@ -571,7 +571,7 @@ export class MapyCzProvider implements IMapProvider {
                         apiKey: this.apiKey,
                         yaw: this.currentHeading * (Math.PI / 180),
                         pitch: this.currentPitch * (Math.PI / 180),
-                        showNavigation: true,
+                        showNavigation: false,
                         lang: 'en',
                         hideErrors: true,
                         hidePopups: true

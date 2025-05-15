@@ -401,9 +401,10 @@ private setupPegmanEvents(): void {
                                 {
                                     direction: [options.pov.heading, options.pov.pitch],
                                     controls: ['zoomControl', 'fullscreenControl'],
-                                    suppressMapOpenBlock: true, // Suppress the "Open in Yandex" link
+                                    suppressMapOpenBlock: true,
                                     width: container.offsetWidth || 640,
-                                    height: container.offsetHeight || 480
+                                    height: container.offsetHeight || 480,
+                                    hotkeysEnabled: false
                                 }
                             );
                             
@@ -449,7 +450,8 @@ private setupPegmanEvents(): void {
                                 direction: this.pendingHeading !== null && this.pendingPitch !== null ? 
                                     [this.pendingHeading, this.pendingPitch] : 'auto',
                                 controls: ['zoomControl', 'fullscreenControl'],
-                                suppressMapOpenBlock: true
+                                suppressMapOpenBlock: true,
+                                hotkeysEnabled: false,
                             }
                         );
                         

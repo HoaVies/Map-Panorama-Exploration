@@ -125,8 +125,8 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                 console.log('Initializing Mapy.cz provider');
             } else {
                 // Use the fixed KakaoMapsProvider
-                currentProvider = new YandexMapsProvider();
-                console.log('Initializing Yandex provider with fixed heading/pitch handling');
+                currentProvider = new KakaoMapsProvider();
+                console.log('Initializing Kakao provider with fixed heading/pitch handling');
             }
             
             // Logging to track what's happening
@@ -401,27 +401,5 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeMap('google');
     } else {
         console.error('Provider selector not found in the DOM');
-    }
-});
-
-// Add keyboard shortcuts
-let isShiftPressed = false;
-
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Shift') {
-        isShiftPressed = true;
-    }
-});
-
-document.addEventListener('keyup', (event) => {
-    if (event.key === 'Shift') {
-        isShiftPressed = false;
-    }
-});
-
-document.addEventListener('contextmenu', (event) => {
-    if (isShiftPressed) {
-        event.preventDefault();
-        // Handle quick drop functionality
     }
 });

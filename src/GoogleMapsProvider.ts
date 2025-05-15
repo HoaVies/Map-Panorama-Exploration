@@ -26,7 +26,7 @@ export class GoogleMapsProvider implements IMapProvider {
             },
            addressControl: true,
             enableCloseButton: true,
-            linksControl: true,
+            linksControl: false,
             panControl: true,
             zoomControl: true,
             fullscreenControl: true,

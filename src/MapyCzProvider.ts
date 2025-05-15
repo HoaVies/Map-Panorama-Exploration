@@ -915,40 +915,44 @@ export class MapyCzProvider implements IMapProvider {
         // Update marker
         if (this.map) {
             try {
-                if (!this.clickMarker) {
-                    this.clickMarker = L.marker(
-                        [position.lat, position.lng],
-                        { icon: this.pegmanIcon || undefined }
-                    ).addTo(this.map);
-                } else {
-                    try {
-                        if (this.map.hasLayer && this.map.hasLayer(this.clickMarker)) {
-                            this.map.removeLayer(this.clickMarker);
-                        }
-                    } catch (e) {
-                    }
-                    
-                    // Create new marker with custom icon
-                    this.clickMarker = L.marker(
-                        [position.lat, position.lng],
-                        { icon: this.pegmanIcon || undefined }
-                    ).addTo(this.map);
+                // Remove existing marker if it exists
+                if (this.clickMarker && this.map.hasLayer(this.clickMarker)) {
+                    this.map.removeLayer(this.clickMarker);
                 }
-            } catch (e) {
-                console.warn('Error updating pegman position:', e);
                 
-                // Fallback: Create a new marker entirely with custom icon
-                try {
-                    if (this.clickMarker && this.map.hasLayer && this.map.hasLayer(this.clickMarker)) {
-                        this.map.removeLayer(this.clickMarker);
+                // Create new marker with custom icon and make it draggable
+                this.clickMarker = L.marker(
+                    [position.lat, position.lng],
+                    { 
+                        icon: this.pegmanIcon || undefined,
+                        draggable: true
                     }
-                    this.clickMarker = L.marker(
-                        [position.lat, position.lng],
-                        { icon: this.pegmanIcon || undefined }
-                    ).addTo(this.map);
-                } catch (e2) {
-                    console.error('Critical error updating pegman position:', e2);
-                }
+                ).addTo(this.map);
+                
+                // Add drag end listener to update street view position when drag ends
+                this.clickMarker.on('dragend', (event: any) => {
+                    const marker = event.target;
+                    const position = marker.getLatLng();
+                    const newPosition = {
+                        lat: position.lat,
+                        lng: position.lng
+                    };
+                    
+                    console.log(`Pegman dragged to: ${newPosition.lat}, ${newPosition.lng}`);
+                    
+                    // Update current position
+                    this.currentPosition = newPosition;
+                    
+                    // Update street view to the new position
+                    this.initializePanorama(newPosition);
+                    
+                    // Call the map click callback if set
+                    if (this.mapClickCallback) {
+                        this.mapClickCallback(newPosition);
+                    }
+                });
+            } catch (e) {
+                console.error('Critical error updating pegman position:', e);
             }
         }
     }

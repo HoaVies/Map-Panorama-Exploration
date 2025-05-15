@@ -24,27 +24,12 @@ export class KakaoMapsProvider implements IMapProvider {
     private coverageWarningElement: HTMLElement | null = null;
     private lastKnownValidPosition: LatLng | null = null;
 
-public initializeMap(containerId: string, options: MapOptions): void {
-    // Get map container first so it's available throughout the method
-    const mapContainer = document.getElementById(containerId);
-    if (!mapContainer) {
-        console.error('Map container element not found');
-        return;
-    }
-
-    // Safety check for Kakao Maps API
-    if (typeof window.kakao === 'undefined' || typeof window.kakao.maps === 'undefined') {
-        console.error('Kakao Maps API not properly loaded');
-        
-        // Show user-friendly error
-        mapContainer.innerHTML = `
-            <div style="text-align: center; padding: 20px; background: #f8f9fa; height: 100%;">
-                <h3>Could not load Kakao Maps</h3>
-                <p>Please try refreshing the page or switch to another provider.</p>
-            </div>
-        `;
-        return;
-    }
+    public initializeMap(containerId: string, options: MapOptions): void {
+        const mapContainer = document.getElementById(containerId);
+        if (!mapContainer) {
+            console.error('Map container not found');
+            return;
+        }
 
         // Check if the initial position is within Kakao's coverage
         if (!this.isWithinKakaoCoverage(options.center)) {
@@ -83,7 +68,6 @@ public initializeMap(containerId: string, options: MapOptions): void {
         if (this.map) {
             this.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
         }
-        this.map = new kakao.maps.Map(mapContainer, mapOptions);
     }
 
     private createCoverageWarning(mapContainer: HTMLElement): void {
@@ -589,6 +573,17 @@ public initializeMap(containerId: string, options: MapOptions): void {
         });
     }
 
+    private showError(message: string): void {
+        const container = document.getElementById('street-view-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="display:flex;justify-content:center;align-items:center;height:100%;background:#f5f5f5;flex-direction:column;">
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    }
+
     private setRoadviewPosition(position: LatLng, heading?: number, pitch?: number): void {
         if (!this.roadviewClient || !this.roadview) return;
         
@@ -610,7 +605,15 @@ public initializeMap(containerId: string, options: MapOptions): void {
                 // Make sure the roadview container is visible
                 const container = document.getElementById('street-view-container');
                 if (container) {
+                    // Resetting the container's HTML
+                    container.innerHTML = '';
                     container.style.display = 'block';
+                    
+                    this.roadview = new kakao.maps.Roadview(container);
+                    
+                    this.setupRoadviewEvents();
+                    
+                    this.roadview.setPanoId(panoId, kakaoPosition);
                 }
                 
                 // Update pegman position
@@ -618,12 +621,7 @@ public initializeMap(containerId: string, options: MapOptions): void {
                     this.pegmanMarker.setPosition(kakaoPosition);
                 }
             } else {
-                console.warn('No roadview found at this position');
-                // Hide the roadview container if no panorama is available
-                const container = document.getElementById('street-view-container');
-                if (container) {
-                    container.style.display = 'none';
-                }
+                this.showError('No street view available at this location');
                 
                 // Clear pending POV since we couldn't set a panorama
                 this.pendingHeading = null;

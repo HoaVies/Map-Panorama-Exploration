@@ -11,7 +11,8 @@ declare namespace ymaps {
     panorama?: panorama.Manager;
     container: { 
         getElement(): HTMLElement;
-        getSize(): number[]; // Add this method
+        getSize(): number[];
+        fitToViewport(): void;
     };
 
     setCenter(center: number[], zoom?: number, options?: any): void;

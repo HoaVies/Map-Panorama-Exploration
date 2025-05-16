@@ -509,7 +509,7 @@ export class KakaoMapsProvider implements IMapProvider {
                 this.pendingPovInterval = null;
                 this.forceNextPov = false;
             }
-        }, 300); // Try every 300ms
+        }, 300);
     }
 
     private setupPegmanEvents(): void {

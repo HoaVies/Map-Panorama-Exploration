@@ -437,7 +437,6 @@
                 }
             });
             
-            // Existing street view container code
             if (streetViewContainer) {
                 streetViewContainer.addEventListener('wheel', function(e) {
                     console.log('Wheel event detected on street-view-container');
@@ -451,26 +450,6 @@
                 streetViewContainer.classList.add('panorama-container');
                 console.log('Street view container wheel event monitor initialized');
             }
-            
-            // Existing event tracking code
-            document.body.addEventListener('wheel', function(e) {
-                const target = e.target;
-                if (!streetViewContainer.contains(target)) {
-                    console.log('Wheel event outside panorama detected on:', target);
-                }
-            }, true);
-            
-            document.addEventListener('keydown', function(e) {
-                if (e.shiftKey) {
-                    document.body.classList.add('shift-active');
-                }
-            });
-            
-            document.addEventListener('keyup', function(e) {
-                if (e.key === 'Shift') {
-                    document.body.classList.remove('shift-active');
-                }
-            });
         });
     </script>
 </body>

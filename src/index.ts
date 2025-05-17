@@ -3,6 +3,7 @@ import { GoogleMapsProvider } from './GoogleMapsProvider.js';
 import { KakaoMapsProvider } from './KakaoMapsProvider.js';
 import { YandexMapsProvider } from './YandexMapsProvider.js';
 import { MapyCzProvider } from './MapyCzProvider.js';
+import { MapillaryMapsProvider } from './MapillaryMapsProvider.js';
 import { LatLng, MapOptions, StreetViewOptions, IMapProvider } from './IMapProvider.js';
 import { CoordinateTranslator } from './CoordinateTranslator.js';
 import { StreetViewFinder } from './StreetViewFinder.js';
@@ -40,7 +41,7 @@ const streetViewOptions: StreetViewOptions = {
 // Create map providers
 let currentProvider: IMapProvider;
 let map: Map;
-let currentProviderType: 'google' | 'kakao' | 'yandex' | 'mapycz' = 'google';
+let currentProviderType: 'google' | 'kakao' | 'yandex' | 'mapycz' | 'mapillary' = 'google';
 let currentState = {
     position: { lat: 37.5665, lng: 126.9780 },
     heading: 0,
@@ -58,7 +59,7 @@ let providerSwitchInProgress = false;
  * This function updates the handling of the isCoverageVisible state when switching providers.
  * It's particularly focused on Kakao which has a different coverage behavior.
  */
-async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapycz') {
+async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapycz' | 'mapillary') {
     // Prevent multiple provider switches happening at the same time
     if (providerSwitchInProgress) {
         console.log('Provider switch already in progress, ignoring request');
@@ -128,21 +129,28 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                 // Fall back to the translated position
             }
             
-            // Create the selected map provider
-            if (providerType === 'google') {
-                // Use the fixed GoogleMapsProvider
-                currentProvider = new GoogleMapsProvider();
-                console.log('Initializing Google provider with fixed POV tracking');
-            } else if (providerType === 'yandex'){
-                currentProvider = new YandexMapsProvider();
-            } else if (providerType === 'mapycz') {
-                currentProvider = new MapyCzProvider();
-                console.log('Initializing Mapy.cz provider');
-            } else {
-                // Use the fixed KakaoMapsProvider
-                currentProvider = new KakaoMapsProvider();
-                console.log('Initializing Kakao provider with fixed heading/pitch handling');
+            // Create the appropriate provider
+            let provider;
+            switch (providerType) {
+                case 'google':
+                    provider = new GoogleMapsProvider();
+                    break;
+                case 'kakao':
+                    provider = new KakaoMapsProvider();
+                    break;
+                case 'yandex':
+                    provider = new YandexMapsProvider();
+                    break;
+                case 'mapycz':
+                    provider = new MapyCzProvider();
+                    break;
+                case 'mapillary':
+                    // Get your Mapillary API key from config or environment
+                    provider = new MapillaryMapsProvider();
+                    break;
             }
+            
+            currentProvider = provider;
             
             // Logging to track what's happening
             console.log(`Current state before provider initialization:`, JSON.stringify({
@@ -411,7 +419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (providerSelector) {
         providerSelector.addEventListener('change', () => {
-            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex' | 'mapycz';
+            const selectedProvider = providerSelector.value as 'google' | 'kakao' | 'yandex' | 'mapycz' | 'mapillary';
             console.log(`Provider changed to: ${selectedProvider}`);
             initializeMap(selectedProvider);
         });

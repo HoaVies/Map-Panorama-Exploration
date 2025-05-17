@@ -5,6 +5,7 @@ declare global {
             kakao: boolean;
             yandex: boolean;
             mapycz: boolean;
+            mapillary:boolean;
         };
         activeProvider: string;
         googleMap: any;
@@ -17,6 +18,7 @@ declare global {
         mapycz_api_key: string;
         Panorama: any;
         L: any;
+        Mapillary: any;
     }
 }
 export {};

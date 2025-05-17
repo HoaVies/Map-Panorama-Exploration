@@ -208,6 +208,7 @@
                 <option value="kakao">Kakao Maps</option>
                 <option value="yandex">Yandex Maps</option>
                 <option value="mapycz">Mapy.cz</option>
+                <option value="mapillary">Mapillary</option>
             </select>
         </div>
         <div class="layout-toggle">
@@ -229,7 +230,8 @@
             google: false,
             kakao: false,
             yandex: false,
-            mapycz: false
+            mapycz: false,
+            mapillary: false
         };
         
         function initApp() {
@@ -280,6 +282,13 @@
         function mapyczLoaded() {
             console.log("Mapy.cz API loaded");
             window.apiLoadStatus.mapycz = true;
+            initApp();
+        }
+
+        // Add Mapillary callback
+        function mapillaryLoaded() {
+            console.log("Mapillary API loaded");
+            window.apiLoadStatus.mapillary = true;
             initApp();
         }
 
@@ -377,6 +386,31 @@
             window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
         </script>
         <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
+    
+    <!-- Move this higher up in your HTML file, after the layout toggle script but before your module script -->
+    <!-- Mapillary API -->
+    <script>
+        // Load Mapillary API explicitly
+        function loadMapillaryApi() {
+            console.log('Starting Mapillary API load');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
+            script.onload = function() {
+                console.log('Mapillary API loaded from dynamic script');
+                window.apiLoadStatus.mapillary = true;
+                mapillaryLoaded();
+            };
+            document.head.appendChild(script);
+            
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
+            document.head.appendChild(link);
+        }
+        
+        // Call this earlier in the page load process
+        loadMapillaryApi();
+    </script>    
         
         <!-- Your application script -->
         <script type="module" src="dist/index.js"></script>
@@ -431,6 +465,12 @@
                         case 'mapycz':
                             if (window.mapyczMap) {
                                 window.mapyczMap.invalidateSize();
+                            }
+                            break;
+                        case 'mapillary':
+                            if (window.mapillaryMap) {
+                                // Trigger appropriate resize event if needed
+                                window.dispatchEvent(new Event('resize'));
                             }
                             break;
                     }

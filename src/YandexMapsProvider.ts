@@ -93,6 +93,18 @@ export class YandexMapsProvider implements IMapProvider {
                         type: mapType,
                         controls: ['zoomControl', 'fullscreenControl', 'typeSelector'],
                     });
+                    
+                    // Expose the map instance to the global window object for external access
+                    (window as any).yandexMap = this.map;
+                    
+                    // Resize event listener to handle layout changes
+                    window.addEventListener('resize', () => {
+                        if (this.map) {
+                            setTimeout(() => {
+                                this.map?.container.fitToViewport();
+                            }, 100);
+                        }
+                    });
     
                     this.pegman = new ymaps.Placemark(center, {
                         hintContent: 'Pegman - Drag to view street panorama'
@@ -106,7 +118,6 @@ export class YandexMapsProvider implements IMapProvider {
     
                     this.map.geoObjects.add(this.pegman);
     
-                    // Use the correct type for getPanoramaManager
                     (this.map.getPanoramaManager() as unknown as Promise<any>).then((manager: any) => {
                         this.panoramaManager = manager;
                         this.createCoverageToggleButton();
@@ -705,7 +716,7 @@ public showCoverage(position?: LatLng): void {
             console.warn('Error setting panorama direction:', e);
         }
         
-        // Clear pending values so they don't get reapplied during normal navigation
+        // Clear pending values
         this.pendingHeading = null;
         this.pendingPitch = null;
     }

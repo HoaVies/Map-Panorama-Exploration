@@ -239,7 +239,8 @@
             if (window.apiLoadStatus.google && 
                 window.apiLoadStatus.kakao && 
                 window.apiLoadStatus.yandex && 
-                window.apiLoadStatus.mapycz) {
+                window.apiLoadStatus.mapycz &&
+                window.apiLoadStatus.mapillary) {
                 
                 console.log("All map APIs loaded successfully");
                 
@@ -393,6 +394,14 @@
         // Load Mapillary API explicitly
         function loadMapillaryApi() {
             console.log('Starting Mapillary API load');
+
+            // First add the CSS
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
+            document.head.appendChild(link);
+            
+            // Then load the script
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
             script.onload = function() {
@@ -400,12 +409,19 @@
                 window.apiLoadStatus.mapillary = true;
                 mapillaryLoaded();
             };
+            script.onerror = function(e) {
+                console.error('Error loading Mapillary script:', e);
+                // Try an alternative URL
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = 'https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.min.js';
+                fallbackScript.onload = function() {
+                    console.log('Mapillary API loaded from fallback source');
+                    window.apiLoadStatus.mapillary = true;
+                    mapillaryLoaded();
+                };
+                document.head.appendChild(fallbackScript);
+            };
             document.head.appendChild(script);
-            
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
-            document.head.appendChild(link);
         }
         
         // Call this earlier in the page load process

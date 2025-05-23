@@ -14,7 +14,8 @@ function waitForAPIs(): Promise<void> {
             window.apiLoadStatus.google && 
             window.apiLoadStatus.kakao && 
             window.apiLoadStatus.yandex && 
-            window.apiLoadStatus.mapycz) {
+            window.apiLoadStatus.mapycz &&
+            window.apiLoadStatus.mapillary) {
             resolve();
         } else {
             document.addEventListener('apis_loaded', () => resolve(), { once: true });
@@ -145,7 +146,6 @@ async function initializeMap(providerType: 'google' | 'kakao' | 'yandex' | 'mapy
                     provider = new MapyCzProvider();
                     break;
                 case 'mapillary':
-                    // Get your Mapillary API key from config or environment
                     provider = new MapillaryMapsProvider();
                     break;
             }

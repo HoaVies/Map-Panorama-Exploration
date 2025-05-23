@@ -11,6 +11,7 @@ declare namespace mapillary {
       direction?: boolean;
       sequence?: boolean;
       zoom?: boolean;
+      attribution?: boolean;
     };
     imageId?: string;
   }
@@ -70,7 +71,7 @@ declare namespace Mapillary {
 
 declare global {
   interface Window {
-    Mapillary: typeof Mapillary;
+    mapillary: typeof mapillary;
   }
 }
 

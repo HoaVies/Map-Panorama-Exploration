@@ -1,567 +1,3 @@
-// import { IMapProvider, LatLng, MapOptions, StreetViewOptions } from './IMapProvider';
-
-// export class MapillaryMapsProvider implements IMapProvider {
-//     private map: any = null;
-//     private mapContainer: HTMLElement | null = null;
-//     private mapillaryViewer: any = null;
-//     private pegmanMarker: any = null;
-//     private clickMarker: any = null;
-//     private mapClickCallback: ((position: LatLng) => void) | null = null;
-//     private streetViewChangeCallback: ((position: LatLng, heading: number, pitch: number) => void) | null = null;
-//     private currentPosition: LatLng | null = null;
-//     private currentHeading: number = 0;
-//     private currentPitch: number = 0;
-//     private currentMapType: string = 'roadmap';
-//     private baseTileLayer: any = null;
-//     private apiKey: string = 'MLY|23877988385171145|bb1227780b1b533bcff4a7db5abe8bf2';
-//     private coverageVisible: boolean = false;
-//     private coverageLayer: any = null;
-//     private debounceTimer: any = null;
-//     private povApplicationInterval: any = null;
-
-//     constructor(apiKey?: string) {
-//         if (apiKey) {
-//             this.apiKey = apiKey;
-//         }
-
-//         // Load Leaflet if not already loaded
-//         this.loadLeaflet(() => {
-//             console.log('Leaflet loaded successfully for Mapillary provider');
-//         });
-//     }
-
-//     private loadLeaflet(callback: () => void): void {
-//         if ((window as any).L) {
-//             callback();
-//             return;
-//         }
-
-//         const checkInterval = setInterval(() => {
-//             if ((window as any).L) {
-//                 clearInterval(checkInterval);
-//                 callback();
-//             }
-//         }, 100);
-//     }
-
-//     public initializeMap(containerId: string, options: MapOptions): void {
-//         this.loadLeaflet(() => {
-//             const L = (window as any).L;
-//             const container = document.getElementById(containerId);
-//             if (!container) {
-//                 throw new Error(`Container element with ID "${containerId}" not found`);
-//             }
-
-//             this.mapContainer = container;
-//             this.currentPosition = options.center;
-
-//             // Create the map
-//             this.map = L.map(container, {
-//                 center: [options.center.lat, options.center.lng], 
-//                 zoom: options.zoom || 16
-//             });
-
-//             // Set map type
-//             this.setMapType(options.mapTypeId || this.currentMapType);
-
-//             // Add map type controls
-//             this.addMapTypeControl();
-
-//             // Click listener for the map
-//             this.map.on('click', (e: any) => {
-//                 const position = {
-//                     lat: e.latlng.lat,
-//                     lng: e.latlng.lng
-//                 };
-                
-//                 // Update current position
-//                 this.currentPosition = position;
-                
-//                 // Add or update marker
-//                 if (!this.clickMarker) {
-//                     this.clickMarker = L.marker([position.lat, position.lng]).addTo(this.map);
-//                 } else {
-//                     this.clickMarker.setLatLng([position.lat, position.lng]);
-//                 }
-                
-//                 // Call the map click callback if set
-//                 if (this.mapClickCallback) {
-//                     this.mapClickCallback(position);
-//                 }
-                
-//                 // Initialize panorama at this position
-//                 this.setStreetViewPosition(position);
-//             });
-
-//             // Place initial marker at start position
-//             if (this.currentPosition) {
-//                 this.clickMarker = L.marker(
-//                     [this.currentPosition.lat, this.currentPosition.lng]
-//                 ).addTo(this.map);
-//             }
-//         });
-//     }
-
-//     // Create and add map type control
-//     private addMapTypeControl(): void {
-//         if (!this.map) return;
-        
-//         const L = (window as any).L;
-        
-//         const MapTypeControl = L.Control.extend({
-//             options: {
-//                 position: 'topleft'
-//             },
-            
-//             onAdd: (map: any) => {
-//                 const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-//                 container.style.backgroundColor = 'white';
-//                 container.style.padding = '5px';
-                
-//                 // Create roadmap button
-//                 const roadmapButton = L.DomUtil.create('button', '', container);
-//                 roadmapButton.innerHTML = 'Map';
-//                 roadmapButton.style.marginRight = '5px';
-//                 roadmapButton.style.cursor = 'pointer';
-//                 roadmapButton.style.padding = '5px 10px';
-//                 roadmapButton.style.border = this.currentMapType === 'roadmap' ? '2px solid #3388ff' : '1px solid #ccc';
-                
-//                 // Create satellite button
-//                 const satelliteButton = L.DomUtil.create('button', '', container);
-//                 satelliteButton.innerHTML = 'Satellite';
-//                 satelliteButton.style.marginRight = '5px';
-//                 satelliteButton.style.cursor = 'pointer';
-//                 satelliteButton.style.padding = '5px 10px';
-//                 satelliteButton.style.border = this.currentMapType === 'satellite' ? '2px solid #3388ff' : '1px solid #ccc';
-                
-//                 // Create hybrid button
-//                 const hybridButton = L.DomUtil.create('button', '', container);
-//                 hybridButton.innerHTML = 'Hybrid';
-//                 hybridButton.style.cursor = 'pointer';
-//                 hybridButton.style.padding = '5px 10px';
-//                 hybridButton.style.border = this.currentMapType === 'hybrid' ? '2px solid #3388ff' : '1px solid #ccc';
-                
-//                 // Add event listeners
-//                 L.DomEvent.on(roadmapButton, 'click', (e: Event) => {
-//                     L.DomEvent.stopPropagation(e);
-//                     this.setMapType('roadmap');
-//                     roadmapButton.style.border = '2px solid #3388ff';
-//                     satelliteButton.style.border = '1px solid #ccc';
-//                     hybridButton.style.border = '1px solid #ccc';
-//                 });
-                
-//                 L.DomEvent.on(satelliteButton, 'click', (e: Event) => {
-//                     L.DomEvent.stopPropagation(e);
-//                     this.setMapType('satellite');
-//                     roadmapButton.style.border = '1px solid #ccc';
-//                     satelliteButton.style.border = '2px solid #3388ff';
-//                     hybridButton.style.border = '1px solid #ccc';
-//                 });
-                
-//                 L.DomEvent.on(hybridButton, 'click', (e: Event) => {
-//                     L.DomEvent.stopPropagation(e);
-//                     this.setMapType('hybrid');
-//                     roadmapButton.style.border = '1px solid #ccc';
-//                     satelliteButton.style.border = '1px solid #ccc';
-//                     hybridButton.style.border = '2px solid #3388ff';
-//                 });
-                
-//                 return container;
-//             }
-//         });
-        
-//         new MapTypeControl().addTo(this.map);
-//     }
-
-//     public setMapType(mapTypeId: string): void {
-//         if (!this.map) return;
-        
-//         const L = (window as any).L;
-        
-//         // Store the current map type
-//         this.currentMapType = mapTypeId;
-//         console.log(`Changing map type to: ${mapTypeId}`);
-        
-//         // Remove existing tile layers
-//         if (this.baseTileLayer) {
-//             this.map.removeLayer(this.baseTileLayer);
-//             this.baseTileLayer = null;
-//         }
-        
-//         if (mapTypeId === 'satellite' || mapTypeId === 'hybrid') {
-//             // Use satellite imagery
-//             this.baseTileLayer = L.tileLayer(
-//                 'https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',
-//                 {
-//                     maxZoom: 20,
-//                     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-//                     attribution: '&copy; <a href="https://www.google.com/">Google Maps</a>'
-//                 }
-//             ).addTo(this.map);
-            
-//             if (mapTypeId === 'hybrid') {
-//                 // Add labels for hybrid mode
-//                 L.tileLayer(
-//                     'https://{s}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}',
-//                     {
-//                         maxZoom: 20,
-//                         subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-//                     }
-//                 ).addTo(this.map);
-//             }
-//         } else {
-//             // Default to OpenStreetMap for roadmap
-//             this.baseTileLayer = L.tileLayer(
-//                 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-//                 {
-//                     maxZoom: 19,
-//                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-//                 }
-//             ).addTo(this.map);
-//         }
-//     }
-
-//     public initializeStreetView(containerId: string, options: StreetViewOptions): void {
-//         // Store the initial position and orientation
-//         this.currentPosition = options.position;
-//         this.currentHeading = options.pov.heading;
-//         this.currentPitch = options.pov.pitch;
-        
-//         this.loadMapillaryScript(() => {
-//             this.setStreetViewPosition(options.position);
-//         });
-//     }
-
-//     private loadMapillaryScript(callback: () => void): void {
-//         if (window.Mapillary) {
-//             callback();
-//             return;
-//         }
-        
-//         const script = document.createElement('script');
-//         script.type = 'text/javascript';
-//         script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
-//         script.onload = callback;
-        
-//         const link = document.createElement('link');
-//         link.rel = 'stylesheet';
-//         link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
-        
-//         document.head.appendChild(link);
-//         document.head.appendChild(script);
-//     }
-
-//     private async initializeMapillaryViewer(position: LatLng): Promise<void> {
-//         // Wait for Mapillary to load if not already loaded
-//         if (!(window as any).Mapillary) {
-//             console.log('Waiting for Mapillary library to load...');
-//             await new Promise<void>((resolve) => {
-//                 const checkInterval = setInterval(() => {
-//                     if ((window as any).Mapillary) {
-//                         console.log('Mapillary library loaded!');
-//                         clearInterval(checkInterval);
-//                         resolve();
-//                     }
-//                 }, 100);
-                
-//                 // Timeout after 10 seconds
-//                 setTimeout(() => {
-//                     clearInterval(checkInterval);
-//                     console.error('Timeout waiting for Mapillary library');
-//                     resolve();
-//                 }, 10000);
-//             });
-//         }
-        
-//         // Check again after waiting
-//         if (!(window as any).Mapillary) {
-//             console.error('Mapillary library still not loaded');
-//             this.showError('Failed to load Mapillary viewer');
-//             return;
-//         }
-
-//         const container = document.getElementById('street-view-container');
-//         if (!container) {
-//             console.error('Street view container not found');
-//             return;
-//         }
-
-//         // Destroy any existing viewer
-//         if (this.mapillaryViewer) {
-//             this.mapillaryViewer.remove();
-//             this.mapillaryViewer = null;
-//         }
-
-//         // Clear the container
-//         container.innerHTML = '';
-//         container.style.display = 'block';
-
-//         try {
-//             // Create a new viewer with type assertion
-//             const Mapillary = (window as any).Mapillary;
-//             this.mapillaryViewer = Mapillary.viewer({
-//                 accessToken: this.apiKey,
-//                 container: container,
-//                 component: {
-//                     cover: false,
-//                     direction: true,
-//                     sequence: true,
-//                     zoom: true
-//                 }
-//             });
-
-//             // Try to find and move to a panorama near the requested position
-//             await this.mapillaryViewer.moveCloseTo({
-//                 lat: position.lat,
-//                 lon: position.lng
-//             });
-
-//             // Set up event listeners
-//             this.setupMapillaryEventListeners();
-
-//             // Apply the saved heading/pitch
-//             if (this.currentHeading !== undefined && this.currentPitch !== undefined) {
-//                 this.mapillaryViewer.setBearing(this.currentHeading);
-//                 this.mapillaryViewer.setTilt(this.currentPitch);
-//             }
-//         } catch (error) {
-//             console.error('Failed to initialize Mapillary viewer:', error);
-//             this.showError('No imagery available at this location');
-//         }
-//     }
-
-//     private setupMapillaryEventListeners(): void {
-//         if (!this.mapillaryViewer) return;
-
-//         // Listen for position changes
-//         this.mapillaryViewer.on('position', (event: any) => {
-//             if (!this.mapillaryViewer) return;
-
-//             try {
-//                 const state = this.mapillaryViewer.getState();
-//                 const newPosition = {
-//                     lat: state.image.latLon.lat,
-//                     lng: state.image.latLon.lon
-//                 };
-
-//                 console.log(`Mapillary position changed to: ${newPosition.lat}, ${newPosition.lng}`);
-
-//                 // Update pegman position
-//                 this.setPegmanPosition(newPosition);
-//                 this.setPegmanVisible(true);
-
-//                 // Update map center
-//                 if (this.map) {
-//                     this.map.setView([newPosition.lat, newPosition.lng], this.map.getZoom());
-//                 }
-
-//                 // Update current position
-//                 this.currentPosition = newPosition;
-
-//                 // Call the change callback with the new position
-//                 if (this.streetViewChangeCallback) {
-//                     this.streetViewChangeCallback(
-//                         newPosition,
-//                         state.camera.bearing,
-//                         state.camera.tilt
-//                     );
-//                 }
-//             } catch (e) {
-//                 console.error('Error handling Mapillary position change:', e);
-//             }
-//         });
-
-//         // Listen for bearing changes
-//         this.mapillaryViewer.on('bearing', (event: any) => {
-//             if (!this.mapillaryViewer || !this.currentPosition) return;
-
-//             try {
-//                 this.currentHeading = event.bearing;
-//                 const state = this.mapillaryViewer.getState();
-//                 this.currentPitch = state.camera.tilt;
-
-//                 if (this.streetViewChangeCallback) {
-//                     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-//                     this.debounceTimer = setTimeout(() => {
-//                         this.streetViewChangeCallback!(
-//                             this.currentPosition!,
-//                             this.currentHeading,
-//                             this.currentPitch
-//                         );
-//                     }, 300);
-//                 }
-//             } catch (e) {
-//                 console.warn('Error handling Mapillary bearing change:', e);
-//             }
-//         });
-//     }
-
-//     private showError(message: string): void {
-//         const container = document.getElementById('street-view-container');
-//         if (container) {
-//             container.innerHTML = `
-//                 <div style="display:flex; height:100%; align-items:center; justify-content:center; text-align:center; background-color:#f8f8f8; color:#666;">
-//                     <div>
-//                         <p>${message}</p>
-//                         <p>Try another location</p>
-//                     </div>
-//                 </div>
-//             `;
-//         }
-//     }
-
-//     public setCenter(position: LatLng): void {
-//         // Store the position
-//         this.currentPosition = position;
-        
-//         // Update the map center if the map is initialized
-//         if (this.map) {
-//             this.map.setView([position.lat, position.lng], this.map.getZoom());
-//         }
-//     }
-
-//     public setZoom(zoom: number): void {
-//         // Update the map zoom if the map is initialized
-//         if (this.map) {
-//             this.map.setZoom(zoom);
-//         }
-//     }
-
-//     public setStreetViewPosition(position: LatLng): void {
-//         // Store the position
-//         this.currentPosition = position;
-        
-//         // Update marker on map if available
-//         if (this.map && this.clickMarker) {
-//             this.setPegmanPosition(position);
-//             this.setPegmanVisible(true);
-//         }
-        
-//         // Initialize/update the Mapillary viewer
-//         this.initializeMapillaryViewer(position);
-//     }
-
-//     public setStreetViewPOV(heading: number, pitch: number): void {
-//         // Store the orientation
-//         this.currentHeading = heading;
-//         this.currentPitch = pitch;
-        
-//         // Update the panorama
-//         if (this.mapillaryViewer) {
-//             console.log(`Setting POV: heading=${heading}, pitch=${pitch}`);
-//             this.mapillaryViewer.setBearing(heading);
-//             this.mapillaryViewer.setTilt(pitch);
-//         }
-//     }
-
-//     // Get the current position
-//     public getCurrentPosition(): LatLng {
-//         if (this.mapillaryViewer) {
-//             try {
-//                 const state = this.mapillaryViewer.getState();
-//                 return {
-//                     lat: state.image.latLon.lat,
-//                     lng: state.image.latLon.lon
-//                 };
-//             } catch (e) {
-//                 console.error('Error getting current position:', e);
-//             }
-//         }
-        
-//         // Otherwise return the stored position
-//         return this.currentPosition || { lat: 0, lng: 0 };
-//     }
-
-//     // Get current street view state (for provider switching)
-//     public getStreetViewState(): any {
-//         return {
-//             position: this.getCurrentPosition(),
-//             heading: this.currentHeading,
-//             pitch: this.currentPitch
-//         };
-//     }
-
-//     public setPegmanPosition(position: LatLng): void {
-//         const L = (window as any).L;
-//         if (!this.map) return;
-        
-//         if (!this.pegmanMarker) {
-//             // Create pegman icon
-//             const pegmanIcon = L.icon({
-//                 iconUrl: 'src/pegman.png',
-//                 iconSize: [32, 32],
-//                 iconAnchor: [16, 32],
-//             });
-            
-//             // Add pegman marker
-//             this.pegmanMarker = L.marker([position.lat, position.lng], {
-//                 icon: pegmanIcon,
-//                 draggable: true
-//             }).addTo(this.map);
-            
-//             // Add drag event handler
-//             this.pegmanMarker.on('dragend', (event: any) => {
-//                 const marker = event.target;
-//                 const position = marker.getLatLng();
-                
-//                 this.setStreetViewPosition({
-//                     lat: position.lat,
-//                     lng: position.lng
-//                 });
-//             });
-//         } else {
-//             // Update existing pegman position
-//             this.pegmanMarker.setLatLng([position.lat, position.lng]);
-//         }
-//     }
-
-//     public setPegmanVisible(visible: boolean): void {
-//         if (!this.pegmanMarker) return;
-        
-//         if (visible) {
-//             this.pegmanMarker.setOpacity(1);
-//         } else {
-//             this.pegmanMarker.setOpacity(0);
-//         }
-//     }
-
-//     public showCoverage(position?: LatLng): void {
-//         // Mapillary doesn't have a direct API for coverage display
-//         // Could implement a custom solution with their API for coverage tiles
-//         this.coverageVisible = true;
-//         console.log('Coverage display is not directly supported by Mapillary API');
-//     }
-
-//     public hideCoverage(): void {
-//         // Remove coverage layer if implemented
-//         this.coverageVisible = false;
-//         if (this.coverageLayer && this.map) {
-//             this.map.removeLayer(this.coverageLayer);
-//             this.coverageLayer = null;
-//         }
-//     }
-
-//     public onMapClick(callback: (position: LatLng) => void): void {
-//         this.mapClickCallback = callback;
-//     }
-
-//     public onStreetViewChange(callback: (position: LatLng, heading: number, pitch: number) => void): void {
-//         this.streetViewChangeCallback = callback;
-//     }
-
-//     public async cleanup(): Promise<void> {
-//         if (this.mapillaryViewer) {
-//             this.mapillaryViewer.remove();
-//             this.mapillaryViewer = null;
-//         }
-        
-//         if (this.map) {
-//             this.map.remove();
-//             this.map = null;
-//         }
-//     }
-// }
-
 import { IMapProvider, LatLng, MapOptions, StreetViewOptions } from './IMapProvider';
 
 /**
@@ -591,9 +27,12 @@ export class MapillaryMapsProvider implements IMapProvider {
   private baseTileLayer: any = null;
 
   private apiKey =
-    'MLY|23877988385171145|bb1227780b1b533bcff4a7db5abe8bf2';          // <-- replace (or pass it in the ctor)
+    'MLY|23877988385171145|bb1227780b1b533bcff4a7db5abe8bf2';
 
   private coverageLayer: any = null;
+  private streetViewContainerId: string = 'street-view-container'; // xoa neu ko chay
+  private coverageTextMarker: any = null;
+  private coverageToggleButton: HTMLButtonElement | null = null;
   private coverageVisible = false;
   private debounce: any = null;
 
@@ -654,9 +93,10 @@ export class MapillaryMapsProvider implements IMapProvider {
 
   /* ------------------------------------------------------- Street View API -- */
   public initializeStreetView(
-    _containerId: string,
+    containerId: string,
     opts: StreetViewOptions,
   ): void {
+    this.streetViewContainerId = containerId;
     this.currentPosition = opts.position;
     this.currentHeading = opts.pov.heading;
     this.currentPitch = opts.pov.pitch;
@@ -685,26 +125,30 @@ export class MapillaryMapsProvider implements IMapProvider {
 
   private async bootViewer(p: LatLng): Promise<void> {
     /* wait until Mapillary-JS is on window (index.html loads it) */
-    if (!(window as any).Mapillary) {
+    if (!(window as any).mapillary) {
+      console.log('Waiting for Mapillary library to load...');
       await new Promise<void>((resolve) => {
         const id = setInterval(() => {
-          if ((window as any).Mapillary) {
+          if ((window as any).mapillary) {
+            console.log('Mapillary library detected!');
             clearInterval(id);
             resolve();
           }
         }, 100);
         setTimeout(() => {
           clearInterval(id);
+          console.warn('Timeout waiting for Mapillary, continuing anyway');
           resolve();
-        }, 10_000);
+        }, 10000);
       });
     }
-    if (!(window as any).Mapillary) {
+    if (!(window as any).mapillary) {
+      console.error('Failed to load Mapillary library');
       this.error('Failed to load Mapillary');
       return;
     }
 
-    const container = document.getElementById('street-view-container');
+    const container = document.getElementById(this.streetViewContainerId);
     if (!container) return;
 
     if (this.mapillaryViewer) {
@@ -715,19 +159,35 @@ export class MapillaryMapsProvider implements IMapProvider {
     container.style.display = 'block';
 
     try {
-      const Mapillary = (window as any).Mapillary;
-      this.mapillaryViewer = new Mapillary.Viewer({
-        container,
+      console.log(`Initializing Mapillary viewer at ${p.lat}, ${p.lng} with token: ${this.apiKey}`);
+      const mapillary = (window as any).mapillary;
+      
+      // Create a viewer - this is the proper way to initialize in v4+
+      this.mapillaryViewer = mapillary.viewer({
         accessToken: this.apiKey,
-        component: { cover: false, direction: true, sequence: true, zoom: true },
+        container,
+        component: { 
+          cover: false,
+          direction: true,
+          sequence: true,
+          zoom: true,
+          attribution: true
+        }
       });
 
+      // Try to move to the requested location
+      console.log('Moving to position...');
       await this.mapillaryViewer.moveCloseTo({ lat: p.lat, lon: p.lng });
+      console.log('Successfully moved to position');
+      
+      // Setup event listeners
       this.wireViewerEvents();
+      
+      // Apply heading/pitch
       this.setStreetViewPOV(this.currentHeading, this.currentPitch);
     } catch (e) {
-      console.error(e);
-      this.error('No imagery available here');
+      console.error('Error initializing Mapillary viewer:', e);
+      this.error('No imagery available at this location');
     }
   }
 
@@ -785,29 +245,208 @@ export class MapillaryMapsProvider implements IMapProvider {
       },
     });
     new MapType().addTo(this.map);
+    
+    // Add the coverage toggle button
+    this.addCoverageToggleButton(L);
+  }
+
+  private addCoverageToggleButton(L: any): void {
+    const CoverageToggle = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd: () => {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        container.style.backgroundColor = 'white';
+        
+        const button = L.DomUtil.create('button', '', container);
+        button.innerHTML = 'Show Coverage';
+        button.title = 'Toggle Mapillary coverage';
+        button.style.cursor = 'pointer';
+        button.style.padding = '5px 10px';
+        button.style.width = '100%';
+        button.style.border = '1px solid #ccc';
+        button.style.backgroundColor = 'white';
+        button.style.color = '#05CB63';
+        
+        L.DomEvent.on(button, 'click', (e: Event) => {
+          L.DomEvent.stopPropagation(e);
+          L.DomEvent.preventDefault(e);
+          
+          if (this.coverageVisible) {
+            this.hideCoverage();
+            button.innerHTML = 'Show Coverage';
+            button.style.backgroundColor = 'white';
+            button.style.color = '#05CB63';
+          } else {
+            this.showCoverage(this.currentPosition || { lat: 0, lng: 0 });
+            button.innerHTML = 'Hide Coverage';
+            button.style.backgroundColor = '#05CB63';
+            button.style.color = 'white';
+          }
+        });
+        
+        // Store a reference to update its state
+        this.coverageToggleButton = button;
+        
+        return container;
+      }
+    });
+    
+    new CoverageToggle().addTo(this.map);
   }
 
   /* ------------------------------------------------- coverage overlay ------ */
   public showCoverage(_position: LatLng): void {
-    if (!this.map || this.coverageLayer) return;
+    if (!this.map) return;
+    if (this.coverageLayer) {
+      // If already visible, just return
+      return;
+    }
+    
     const L = (window as any).L;
-
-    const url =
-      `https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}` +
-      `?access_token=${this.apiKey}`;
-
-    this.coverageLayer = L.tileLayer(url, {
-      maxZoom: 20,
-      attribution: '&copy; Mapillary',
-    }).addTo(this.map);
-
     this.coverageVisible = true;
+    
+    // First, let's check if we can add the proper Mapillary vector tiles
+    try {
+      // We need to load the Mapbox GL Leaflet plugin if not already loaded
+      this.loadMapboxGLPlugin(() => {
+        // Add the Mapillary vector tile layer
+        const coverageUrl = `https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=${this.apiKey}`;
+        
+        if (L.mapboxGL) {
+          // Using Mapbox GL for vector tile rendering
+          this.coverageLayer = L.mapboxGL({
+            accessToken: 'pk.eyJ1IjoicXVhbmdoYXRyYW4iLCJhIjoiY21iMGp6eWZ3MHR1bDJrc2Noa3gwYmNwbiJ9.cMaYEdb4yY54myrmV1_3Qw',
+            style: {
+              version: 8,
+              sources: {
+                'mapillary-sequences': {
+                  type: 'vector',
+                  tiles: [coverageUrl],
+                  minzoom: 0,
+                  maxzoom: 14
+                }
+              },
+              layers: [
+                {
+                  id: 'mapillary-sequences',
+                  type: 'line',
+                  source: 'mapillary-sequences',
+                  'source-layer': 'sequence',
+                  layout: {
+                    'line-cap': 'round',
+                    'line-join': 'round'
+                  },
+                  paint: {
+                    'line-opacity': 0.6,
+                    'line-color': '#05CB63',
+                    'line-width': 2
+                  }
+                },
+                {
+                  id: 'mapillary-images',
+                  type: 'circle',
+                  source: 'mapillary-sequences',
+                  'source-layer': 'image',
+                  paint: {
+                    'circle-radius': 3,
+                    'circle-opacity': 0.8,
+                    'circle-color': '#05CB63'
+                  }
+                }
+              ]
+            }
+          }).addTo(this.map);
+          
+          console.log("Added Mapillary coverage layer with Mapbox GL");
+        } else {
+          // Fallback to simpler coverage representation if Mapbox GL isn't available
+          console.warn("MapboxGL plugin not available, using simple coverage indicator");
+          this.addSimpleCoverageIndicator();
+        }
+      });
+    } catch (e) {
+      console.error("Error adding coverage layer:", e);
+      this.addSimpleCoverageIndicator();
+    }
+  }
+
+  private loadMapboxGLPlugin(callback: () => void): void {
+    // Check if the plugin is already loaded
+    if ((window as any).L && (window as any).L.mapboxGL) {
+      return callback();
+    }
+    
+    // Load Mapbox GL JS
+    if (!(window as any).mapboxgl) {
+      const mapboxScript = document.createElement('script');
+      mapboxScript.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+      document.head.appendChild(mapboxScript);
+      
+      const mapboxStyles = document.createElement('link');
+      mapboxStyles.rel = 'stylesheet';
+      mapboxStyles.href = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css';
+      document.head.appendChild(mapboxStyles);
+    }
+    
+    // Load the Mapbox GL Leaflet plugin
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/mapbox-gl-leaflet/leaflet-mapbox-gl.js';
+    script.onload = callback;
+    document.head.appendChild(script);
+  }
+
+  private addSimpleCoverageIndicator(): void {
+    // If advanced coverage isn't available, add a simpler indicator
+    // This is a fallback solution when vector tiles can't be properly displayed
+    const L = (window as any).L;
+    
+    if (this.map && !this.coverageLayer) {
+      // Create a semi-transparent overlay to indicate coverage mode
+      this.coverageLayer = L.rectangle(
+        this.map.getBounds(),
+        { 
+          color: '#05CB63',
+          weight: 2,
+          fillOpacity: 0.05,
+          opacity: 0.3
+        }
+      ).addTo(this.map);
+      
+      // Update the bounds when the map moves
+      this.map.on('moveend', () => {
+        if (this.coverageLayer && this.coverageVisible) {
+          this.coverageLayer.setBounds(this.map.getBounds());
+        }
+      });
+      
+      // Add a text indicator
+      const center = this.map.getCenter();
+      const coverageText = L.marker(
+        [center.lat, center.lng],
+        {
+          icon: L.divIcon({
+            html: '<div style="background-color:rgba(5,203,99,0.7);color:white;padding:5px 10px;border-radius:3px;">Coverage Mode Active</div>',
+            className: 'mapillary-coverage-text'
+          })
+        }
+      ).addTo(this.map);
+      
+      // Store the text marker for later removal
+      this.coverageTextMarker = coverageText;
+    }
   }
 
   public hideCoverage(): void {
-    if (this.coverageLayer && this.map) {
-      this.map.removeLayer(this.coverageLayer);
-      this.coverageLayer = null;
+    if (this.map) {
+      if (this.coverageLayer) {
+        this.map.removeLayer(this.coverageLayer);
+        this.coverageLayer = null;
+      }
+      
+      if (this.coverageTextMarker) {
+        this.map.removeLayer(this.coverageTextMarker);
+        this.coverageTextMarker = null;
+      }
     }
     this.coverageVisible = false;
   }

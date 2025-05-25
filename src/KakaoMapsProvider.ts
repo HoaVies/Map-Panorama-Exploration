@@ -122,11 +122,6 @@ export class KakaoMapsProvider implements IMapProvider {
         kakao.maps.event.addListener(this.map, 'zoom_changed', () => {
             this.checkMapCoverage();
         });
-        
-        // Also check when bounds change
-        kakao.maps.event.addListener(this.map, 'bounds_changed', () => {
-            this.checkMapCoverage();
-        });
     }
 
     private checkMapCoverage(): void {

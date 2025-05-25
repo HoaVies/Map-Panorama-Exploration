@@ -75,7 +75,7 @@ Add these keys to the respective script tags in `index.html`.
 
 3. Start the TypeScript compiler in watch mode:
    ```bash
-   npm start
+   npm run build
    ```
 
 4. In a separate terminal, start the local development server:

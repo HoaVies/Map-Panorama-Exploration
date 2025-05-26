@@ -144,225 +144,66 @@ export class MapillaryMapsProvider implements IMapProvider {
   private loadCoverageTiles(): void {
     const L = (window as any).L;
     if (!this.map) return;
-
-    const zoom = this.map.getZoom();
     try {
-      // Clear existing coverage layers
       this.clearCoverageLayers();
-
-      // Load appropriate coverage layer based on zoom level
-      if (zoom <= 5) {
-        // Overview layer (zoom 0-5) - Points
-        this.addOverviewLayer(L);
-      } else if (zoom >= 6 && zoom <= 13) {
-        // Sequence layer (zoom 6-14) - LineStrings
-        this.addSequenceLayer(L);
-      } else if (zoom >= 14) {
-        // Image layer (zoom 14+) - Points
-        this.addImageLayer(L);
-      }
+      this.addVectorTileCoverage(L);
     } catch (error) {
       console.error('Error loading coverage tiles:', error);
       this.showError('Failed to load coverage data');
     }
   }
 
-  private addOverviewLayer(L: any): void {
-    // Simplified overview layer - just use the sequence loading approach
-    this.loadSequenceVectorGrid(L);
-  }
-
-  private addSequenceLayer(L: any): void {
-    // Use Leaflet vector grid for better performance with sequence data
-    this.loadSequenceVectorGrid(L);
-  }
-
-  private loadSequenceVectorGrid(L: any): void {
-    // Create a feature group for sequences
-    this.coverageLayers.sequences = L.featureGroup().addTo(this.map);
-
-    const bounds = this.map.getBounds();
-    const zoom = Math.min(Math.max(this.map.getZoom(), 6), 14);
-    
-    // Get tile coordinates for current view
-    const tiles = this.getTileCoordinatesForBounds(bounds, zoom);
-    
-    tiles.forEach((tileCoord: any) => {
-      this.loadSequenceTile(tileCoord, L);
-    });
-  }
-
-  private async loadSequenceTile(tileCoord: any, L: any): Promise<void> {
-    try {
-      const url = `https://tiles.mapillary.com/maps/vtp/mly1_public/2/${tileCoord.z}/${tileCoord.x}/${tileCoord.y}?access_token=${this.apiKey}`;
-      
-      // For now, we'll use a simpler approach and load sequences via Graph API
-      // In a production app, you'd want to use a proper vector tile library
-      const bounds = this.map.getBounds();
-      const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-      
-      const imageResponse = await fetch(
-        `https://graph.mapillary.com/images?access_token=${this.apiKey}&fields=id,computed_geometry,sequence,captured_at&bbox=${bbox}&limit=200`
-      );
-      
-      const imageData = await imageResponse.json();
-      
-      if (imageData.data && imageData.data.length > 0) {
-        this.renderSequenceFeatures(imageData.data, L);
-      }
-      
-    } catch (error: any) {
-      console.error('Error loading sequence tile:', error);
+  private addVectorTileCoverage(L: any): void {
+    if (!L.vectorGrid || !L.vectorGrid.protobuf) {
+      this.showError('Leaflet.VectorGrid plugin is not loaded. Please check your index.html.');
+      throw new Error('Leaflet.VectorGrid plugin is not loaded. Please check your index.html.');
     }
-  }
-
-  private renderSequenceFeatures(images: any[], L: any): void {
-    // Group images by sequence
-    const sequences: { [key: string]: any[] } = {};
-    
-    images.forEach(image => {
-      if (image.sequence && image.computed_geometry) {
-        if (!sequences[image.sequence]) {
-          sequences[image.sequence] = [];
-        }
-        sequences[image.sequence].push(image);
-      }
-    });
-
-    // Render each sequence as a polyline with points
-    Object.keys(sequences).forEach(sequenceId => {
-      const sequenceImages = sequences[sequenceId].sort((a, b) => a.captured_at - b.captured_at);
-      
-      // Create polyline for sequence
-      const coordinates = sequenceImages.map(img => [
-        img.computed_geometry.coordinates[1], // lat
-        img.computed_geometry.coordinates[0]  // lng
-      ]);
-
-      if (coordinates.length > 1) {
-        const polyline = L.polyline(coordinates, {
-          color: '#05CB63',
-          weight: 2,
-          opacity: 0.7
-        });
-        this.coverageLayers.sequences.addLayer(polyline);
-      }
-
-      // Add clickable points for each image
-      sequenceImages.forEach(image => {
-        const point = L.circleMarker([
-          image.computed_geometry.coordinates[1],
-          image.computed_geometry.coordinates[0]
-        ], {
-          radius: 4,
-          fillColor: image.is_pano ? '#1E90FF' : '#05CB63',
-          color: '#ffffff',
-          weight: 1,
-          opacity: 1,
-          fillOpacity: 0.8
-        });
-
-        // Add click handler to load this specific image
-        point.on('click', (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          this.loadImageById(image.id);
-        });
-
-        // Add tooltip
-        point.bindTooltip(`Image: ${image.id}<br>Captured: ${new Date(image.captured_at).toLocaleDateString()}`, {
-          direction: 'top'
-        });
-
-        this.coverageLayers.sequences.addLayer(point);
-      });
-    });
-  }
-
-  private addImageLayer(L: any): void {
-    // For zoom 14+, show individual image points
-    this.loadImagePoints(L);
-  }
-
-  private async loadImagePoints(L: any): Promise<void> {
-    const bounds = this.map.getBounds();
-    const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-    
-    try {
-      const response = await fetch(
-        `https://graph.mapillary.com/images?access_token=${this.apiKey}&fields=id,computed_geometry,compass_angle,is_pano,captured_at&bbox=${bbox}&limit=1000`
-      );
-      
-      const data = await response.json();
-      
-      if (data.data && data.data.length > 0) {
-        this.renderImagePoints(data.data, L);
-      }
-      
-    } catch (error) {
-      console.error('Error loading image points:', error);
+    // Remove existing vector grid if present
+    if (this.coverageLayers.vectorGrid) {
+      this.map.removeLayer(this.coverageLayers.vectorGrid);
+      delete this.coverageLayers.vectorGrid;
     }
-  }
 
-  private renderImagePoints(images: any[], L: any): void {
-    this.coverageLayers.images = L.featureGroup().addTo(this.map);
+    // Add Mapillary vector tile layer (matching the MapLibre/MapboxGL example)
+    const vectorGrid = L.vectorGrid.protobuf(
+      'https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}?access_token=' + this.apiKey,
+      {
+        vectorTileLayerStyles: {
+          sequence: {
+            weight: 1,
+            color: '#05CB63',
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round',
+          },
+          image: {
+            radius: 5,
+            fillColor: '#05CB63',
+            color: '#05CB63',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 1,
+          }
+        },
+        interactive: true,
+        maxZoom: 20,
+        getFeatureId: (f: any) => f.properties.id
+      }
+    );
 
-    images.forEach(image => {
-      if (image.computed_geometry) {
-        const point = L.circleMarker([
-          image.computed_geometry.coordinates[1],
-          image.computed_geometry.coordinates[0]
-        ], {
-          radius: 6,
-          fillColor: image.is_pano ? '#1E90FF' : '#05CB63',
-          color: '#ffffff',
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 0.9
-        });
-
-        // Add click handler
-        point.on('click', (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          console.log('Loading image:', image.id);
-          this.loadImageById(image.id);
-          
-          // Update pegman position
-          const position = {
-            lat: image.computed_geometry.coordinates[1],
-            lng: image.computed_geometry.coordinates[0]
-          };
-          this.setPegmanPosition(position);
-        });
-
-        // Add direction indicator if compass angle is available
-        if (image.compass_angle !== undefined) {
-          const directionIcon = L.divIcon({
-            html: `<div style="width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-bottom:8px solid #05CB63;transform:rotate(${image.compass_angle}deg);"></div>`,
-            className: 'direction-arrow',
-            iconSize: [6, 8],
-            iconAnchor: [3, 4]
-          });
-          
-          const directionMarker = L.marker([
-            image.computed_geometry.coordinates[1],
-            image.computed_geometry.coordinates[0]
-          ], { icon: directionIcon });
-          
-          this.coverageLayers.images.addLayer(directionMarker);
+    // Click handler for images
+    vectorGrid.on('click', (e: any) => {
+      if (e.layer.properties && e.layer.properties.id) {
+        this.loadImageById(e.layer.properties.id);
+        // Move pegman to this point
+        if (e.latlng) {
+          this.setPegmanPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
         }
-
-        // Add tooltip
-        point.bindTooltip(`
-          Image: ${image.id}<br>
-          Type: ${image.is_pano ? 'Panorama' : 'Regular'}<br>
-          Captured: ${new Date(image.captured_at).toLocaleDateString()}
-        `, {
-          direction: 'top'
-        });
-
-        this.coverageLayers.images.addLayer(point);
       }
     });
+
+    vectorGrid.addTo(this.map);
+    this.coverageLayers.vectorGrid = vectorGrid;
   }
 
   public hideCoverage(): void {
@@ -501,21 +342,26 @@ export class MapillaryMapsProvider implements IMapProvider {
   private wireViewerEvents(): void {
     if (!this.mapillaryViewer) return;
 
-    this.mapillaryViewer.on('position', () => {
+    // Listen for position changes using event data (not getState)
+    this.mapillaryViewer.on('position', (event: any) => {
       try {
-        const state = this.mapillaryViewer.getState();
-        if (state?.image?.latLon) {
-          const p = { lat: state.image.latLon.lat, lng: state.image.latLon.lon };
+        // Use event data directly
+        if (event && event.latLon) {
+          const p = { lat: event.latLon.lat, lng: event.latLon.lon };
           this.currentPosition = p;
           this.setPegmanPosition(p);
           this.setPegmanVisible(true);
-          
+
           if (this.map) {
             this.map.setView([p.lat, p.lng], this.map.getZoom());
           }
 
-          if (this.svChangeCb && state.camera) {
-            this.svChangeCb(p, state.camera.bearing || 0, state.camera.tilt || 0);
+          // Mapillary v4+ does not provide camera info in the same way
+          if (this.svChangeCb) {
+            // If event has camera info, use it, else fallback to current heading/pitch
+            const heading = event.bearing || this.currentHeading;
+            const pitch = event.tilt || this.currentPitch;
+            this.svChangeCb(p, heading, pitch);
           }
         }
       } catch (e) {
@@ -523,13 +369,12 @@ export class MapillaryMapsProvider implements IMapProvider {
       }
     });
 
+    // Listen for bearing changes using event data
     this.mapillaryViewer.on('bearing', (ev: any) => {
       try {
         this.currentHeading = ev.bearing || 0;
         if (this.svChangeCb && this.currentPosition) {
-          const state = this.mapillaryViewer.getState();
-          const pitch = state?.camera?.tilt || 0;
-          this.currentPitch = pitch;
+          // Mapillary v4+ does not provide pitch in bearing event, so use currentPitch
           this.svChangeCb(this.currentPosition, this.currentHeading, this.currentPitch);
         }
       } catch (e) {
@@ -688,15 +533,16 @@ export class MapillaryMapsProvider implements IMapProvider {
         iconSize: [32, 32],
         iconAnchor: [16, 32],
       });
-      
+
       this.pegmanMarker = L.marker([p.lat, p.lng], {
         icon,
         draggable: true,
       }).addTo(this.map);
 
-      this.pegmanMarker.on('dragend', (e: any) => {
+      this.pegmanMarker.on('dragend', async (e: any) => {
         const q = e.target.getLatLng();
-        this.setStreetViewPosition({ lat: q.lat, lng: q.lng });
+        // Find closest image and load it
+        await this.findAndLoadNearestImage({ lat: q.lat, lng: q.lng });
       });
     } else {
       this.pegmanMarker.setLatLng([p.lat, p.lng]);

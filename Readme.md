@@ -20,7 +20,7 @@ This project was developed as part of an 8-week internship period under the supe
 
 - **Tran Quang Ha**:
   - Yandex Maps implementation (base map with marker functionality, 0.5 points)
-  - Mapillary: ?/1
+  - Mapillary implementation (base map, 0.5 points)
   - Total: 1 point
 
 ## 🌟 Features

@@ -209,6 +209,123 @@
             100% { transform: rotate(360deg); }
         }
     </style>
+
+    <style>
+        /* Add to your existing styles */
+        
+        /* Enhanced coverage and street view styling */
+        .mapillary-coverage-overlay {
+            pointer-events: auto !important;
+            cursor: crosshair;
+        }
+        
+        .mapillary-coverage-overlay:hover {
+            fill-opacity: 0.2 !important;
+        }
+        
+        /* Street view container enhancements */
+        #street-view-container {
+            position: relative;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        
+        /* Custom Mapillary viewer styling */
+        .mapillary-viewer {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        /* Coverage info box */
+        .coverage-info {
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .coverage-info div {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Loading states */
+        .loading-street-view {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #f8f8f8;
+            color: #666;
+            font-family: Arial, sans-serif;
+        }
+        
+        .loading-street-view::before {
+            content: '🔄';
+            margin-right: 8px;
+            animation: spin 2s linear infinite;
+        }
+        
+        /* Error states */
+        .error-street-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #f8f8f8;
+            color: #999;
+            text-align: center;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        .error-street-view::before {
+            content: '⚠️';
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        /* Enhanced map controls */
+        .leaflet-control-container .leaflet-control {
+            margin: 10px;
+        }
+        
+        .leaflet-bar {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .leaflet-bar button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        /* Pegman dragging states */
+        .mapillary-pegman {
+            transition: all 0.2s ease;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .mapillary-pegman:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.4));
+        }
+        
+        /* Responsive design improvements */
+        @media (max-width: 768px) {
+            .leaflet-control {
+                margin: 5px !important;
+            }
+            
+            .leaflet-control button,
+            .leaflet-control select {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            
+            .coverage-info div {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+        }
+    </style>
     <!-- Leaflet CSS for Mapy.cz -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
@@ -413,7 +530,7 @@
     <script>
         // Load Mapillary API explicitly
         function loadMapillaryApi() {
-            console.log('Starting Mapillary API load');
+            console.log('Starting enhanced Mapillary API load');
 
             // First add the CSS
             const link = document.createElement('link');
@@ -421,31 +538,94 @@
             link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
             document.head.appendChild(link);
             
-            // Then load the script
+            // Load the main Mapillary script
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
+            
             script.onload = function() {
-                console.log('Mapillary API loaded from dynamic script');
-                window.apiLoadStatus.mapillary = true;
-                mapillaryLoaded();
+                console.log('Mapillary script loaded, checking for mapillary object...');
+                
+                // Wait a bit for the library to initialize
+                setTimeout(() => {
+                    if (window.mapillary) {
+                        console.log('Mapillary API loaded and ready');
+                        window.apiLoadStatus.mapillary = true;
+                        mapillaryLoaded();
+                    } else {
+                        console.warn('Mapillary script loaded but mapillary object not found, retrying...');
+                        // Try alternative access method
+                        if (window.Mapillary) {
+                            window.mapillary = window.Mapillary;
+                            console.log('Found Mapillary under window.Mapillary');
+                            window.apiLoadStatus.mapillary = true;
+                            mapillaryLoaded();
+                        } else {
+                            console.error('Mapillary object not found after loading');
+                            // Mark as loaded anyway to prevent hanging
+                            window.apiLoadStatus.mapillary = true;
+                            mapillaryLoaded();
+                        }
+                    }
+                }, 500);
             };
+            
             script.onerror = function(e) {
-                console.error('Error loading Mapillary script:', e);
-                // Try an alternative URL
+                console.error('Error loading primary Mapillary script:', e);
+                console.log('Trying fallback CDN...');
+                
+                // Try fallback
                 const fallbackScript = document.createElement('script');
                 fallbackScript.src = 'https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.min.js';
+                
                 fallbackScript.onload = function() {
-                    console.log('Mapillary API loaded from fallback source');
+                    console.log('Mapillary API loaded from fallback CDN');
+                    setTimeout(() => {
+                        if (window.mapillary || window.Mapillary) {
+                            if (!window.mapillary && window.Mapillary) {
+                                window.mapillary = window.Mapillary;
+                            }
+                            window.apiLoadStatus.mapillary = true;
+                            mapillaryLoaded();
+                        } else {
+                            console.warn('Fallback loaded but mapillary object still not found');
+                            window.apiLoadStatus.mapillary = true;
+                            mapillaryLoaded();
+                        }
+                    }, 500);
+                };
+                
+                fallbackScript.onerror = function() {
+                    console.error('Both primary and fallback Mapillary scripts failed');
+                    // Still mark as loaded to prevent hanging
                     window.apiLoadStatus.mapillary = true;
                     mapillaryLoaded();
                 };
+                
                 document.head.appendChild(fallbackScript);
             };
+            
             document.head.appendChild(script);
         }
         
-        // Call this earlier in the page load process
-        loadMapillaryApi();
+        // Enhanced mapillary loaded callback
+        function mapillaryLoaded() {
+            console.log('Mapillary loading process completed');
+            
+            // Verify the mapillary object has the required methods
+            if (window.mapillary && typeof window.mapillary.viewer === 'function') {
+                console.log('Mapillary viewer function confirmed available');
+            } else if (window.mapillary) {
+                console.warn('Mapillary object found but viewer function missing');
+            } else {
+                console.warn('Mapillary object not found, provider may have limited functionality');
+            }
+            
+            window.apiLoadStatus.mapillary = true;
+            initApp();
+        }
+        
+        // Start the enhanced loading process
+        setTimeout(loadMapillaryApi, 100);
     </script>    
         
         <!-- Your application script -->

@@ -20,12 +20,12 @@ This project was developed as part of an 8-week internship period under the supe
 
 - **Tran Quang Ha**:
   - Yandex Maps implementation (base map with marker functionality, 0.5 points)
-  - Mapillary implementation (base map with panorama, 0.5 points)
-  - Total: 1 points
+  - Mapillary: ?/1
+  - Total: 1 point
 
 ## 🌟 Features
 
-- **Multi-Provider Support**: Google Maps, Kakao Maps, Yandex Maps, Mapy.cz, Mapillary
+- **Multi-Provider Support**: Google Maps, Kakao Maps, Yandex Maps, Mapy.cx, and Mapillary
 - **Synchronized Views**: Updates between 2D map and panorama view
 - **Pegman Navigation**: Visual indicator of position and orientation on the 2D map
 - **Coverage Map**: Display of areas where street view is available
@@ -124,7 +124,7 @@ IMapProvider (interface)
     ├── KakaoMapsProvider
     ├── YandexMapsProvider
     ├── MapyCzProvider
-    └── MapillaryMapsProvider
+    └── Mapillary
 ```
 
 ### Interface Design Pattern
@@ -211,5 +211,5 @@ The project implements a sophisticated cross-provider synchronization system:
 - Kakao Maps API
 - Yandex Maps API
 - Mapy.cz API
-- Mapillary API
+- Mapillary
 - https://github.com/sk-zk/streetlevel

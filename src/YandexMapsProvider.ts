@@ -18,6 +18,7 @@ export class YandexMapsProvider implements IMapProvider {
     private coverageToggleButton: HTMLButtonElement | null = null;
     private lastUserZoom: number | null = null;
     private lastUserCenter: number[] | null = null;
+
     private createCoverageToggleButton(): void {
         if (!this.map) return;
         
@@ -27,7 +28,7 @@ export class YandexMapsProvider implements IMapProvider {
         const controlsContainer = document.createElement('div');
         controlsContainer.className = 'yandex-map-controls';
         controlsContainer.style.position = 'absolute';
-        controlsContainer.style.top = '10px';
+        controlsContainer.style.top = '50px'; // Move down to 50px
         controlsContainer.style.left = '10px';
         controlsContainer.style.zIndex = '10000';
         
@@ -91,10 +92,10 @@ export class YandexMapsProvider implements IMapProvider {
                         center: center,
                         zoom: options.zoom,
                         type: mapType,
-                        controls: ['zoomControl', 'fullscreenControl', 'typeSelector'],
+                        controls: ['zoomControl', 'fullscreenControl'],
                     });
                     
-                    // Expose the map instance to the global window object for external access
+                    this.createCustomMapTypeControl(container);
                     (window as any).yandexMap = this.map;
                     
                     // Resize event listener to handle layout changes
@@ -293,7 +294,7 @@ private setupPegmanEvents(): void {
                 this.streetViewChangeCallback(
                     this.currentPanoramaPosition,
                     direction[0],
-                    direction[1]
+                    direction[1 ]
                 );
             }
             
@@ -481,7 +482,7 @@ private setupPegmanEvents(): void {
                     this.streetViewChangeCallback(
                         position,
                         direction[0],
-                        direction[1]
+                        direction[1 ]
                     );
                 }
                 
@@ -694,7 +695,7 @@ public showCoverage(position?: LatLng): void {
                 this.streetViewChangeCallback(
                     this.currentPanoramaPosition,
                     direction[0],
-                    direction[1]
+                    direction[1 ]
                 );
             }
         });
@@ -719,5 +720,54 @@ public showCoverage(position?: LatLng): void {
         // Clear pending values
         this.pendingHeading = null;
         this.pendingPitch = null;
+    }
+
+    private createCustomMapTypeControl(container: HTMLElement): void {
+        const controlContainer = document.createElement('div');
+        controlContainer.className = 'custom-map-type-control';
+        controlContainer.style.position = 'absolute';
+        controlContainer.style.top = '10px';
+        controlContainer.style.left = '10px';
+        controlContainer.style.backgroundColor = 'white';
+        controlContainer.style.borderRadius = '2px';
+        controlContainer.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.3)';
+        controlContainer.style.zIndex = '10000';
+        controlContainer.style.display = 'flex';
+  
+        const mapTypes = [
+            { id: 'roadmap', title: 'Map', type: 'yandex#map' },
+            { id: 'satellite', title: 'Satellite', type: 'yandex#satellite' },
+        ];
+        
+        const currentType = this.map?.getType() || 'yandex#map';
+        
+        mapTypes.forEach((mapType, index) => {
+            const button = document.createElement('button');
+            button.innerText = mapType.title;
+            button.className = 'map-type-button';
+            button.style.padding = '8px 16px';
+            button.style.margin = '0';
+            button.style.backgroundColor = mapType.type === currentType ? '#e6e6e6' : 'white';
+            button.style.color = '#000';
+            button.style.border = 'none'; 
+            button.style.borderRight = index < mapTypes.length - 1 ? '1px solid #ccc' : 'none';
+            button.style.cursor = 'pointer';
+            button.style.fontSize = '13px';
+            button.style.fontFamily = 'Arial, sans-serif';
+            button.style.outline = 'none';
+            
+            button.addEventListener('click', () => {
+                this.setMapType(mapType.id);
+                const buttons = controlContainer.getElementsByClassName('map-type-button');
+                for (let i = 0; i < buttons.length; i++) {
+                    (buttons[i] as HTMLButtonElement).style.backgroundColor = 'white';
+                }
+                button.style.backgroundColor = '#e6e6e6';
+            });
+            
+            controlContainer.appendChild(button);
+        });
+        
+        container.appendChild(controlContainer);
     }
 }

@@ -528,105 +528,71 @@
     <!-- Move this higher up in your HTML file, after the layout toggle script but before your module script -->
     <!-- Mapillary API -->
     <script>
-        // Load Mapillary API explicitly
-        function loadMapillaryApi() {
-            console.log('Starting enhanced Mapillary API load');
+    // Load Mapillary API explicitly
+    function loadMapillaryApi() {
+        console.log('Starting Mapillary API load');
 
-            // First add the CSS
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
-            document.head.appendChild(link);
+        // First add the CSS
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
+        document.head.appendChild(link);
+        
+        // Load the main Mapillary script
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
+        
+        script.onload = function() {
+            console.log('Mapillary script loaded, verifying API structure...');
             
-            // Load the main Mapillary script
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
-            
-            script.onload = function() {
-                console.log('Mapillary script loaded, checking for mapillary object...');
+            // Wait for the library to fully initialize
+            setTimeout(() => {
+                // Check different possible API structures
+                let mapillaryAPI = null;
                 
-                // Wait a bit for the library to initialize
-                setTimeout(() => {
-                    if (window.mapillary) {
-                        console.log('Mapillary API loaded and ready');
-                        window.apiLoadStatus.mapillary = true;
-                        mapillaryLoaded();
-                    } else {
-                        console.warn('Mapillary script loaded but mapillary object not found, retrying...');
-                        // Try alternative access method
-                        if (window.Mapillary) {
-                            window.mapillary = window.Mapillary;
-                            console.log('Found Mapillary under window.Mapillary');
-                            window.apiLoadStatus.mapillary = true;
-                            mapillaryLoaded();
-                        } else {
-                            console.error('Mapillary object not found after loading');
-                            // Mark as loaded anyway to prevent hanging
-                            window.apiLoadStatus.mapillary = true;
-                            mapillaryLoaded();
-                        }
-                    }
-                }, 500);
-            };
-            
-            script.onerror = function(e) {
-                console.error('Error loading primary Mapillary script:', e);
-                console.log('Trying fallback CDN...');
+                if (window.mapillary && window.mapillary.Viewer) {
+                    console.log('Found mapillary.Viewer constructor');
+                    mapillaryAPI = window.mapillary;
+                } else if (window.Mapillary && window.Mapillary.Viewer) {
+                    console.log('Found Mapillary.Viewer constructor');
+                    mapillaryAPI = window.Mapillary;
+                    // Create alias for consistency
+                    window.mapillary = window.Mapillary;
+                } else if (window.mapillary && typeof window.mapillary === 'function') {
+                    console.log('Found mapillary as function');
+                    // Some versions expose it as a function
+                    mapillaryAPI = { Viewer: window.mapillary };
+                    window.mapillary = mapillaryAPI;
+                } else {
+                    console.error('Mapillary API structure not recognized');
+                    console.log('Available on window:', Object.keys(window).filter(k => k.toLowerCase().includes('mapillary')));
+                }
                 
-                // Try fallback
-                const fallbackScript = document.createElement('script');
-                fallbackScript.src = 'https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.min.js';
-                
-                fallbackScript.onload = function() {
-                    console.log('Mapillary API loaded from fallback CDN');
-                    setTimeout(() => {
-                        if (window.mapillary || window.Mapillary) {
-                            if (!window.mapillary && window.Mapillary) {
-                                window.mapillary = window.Mapillary;
-                            }
-                            window.apiLoadStatus.mapillary = true;
-                            mapillaryLoaded();
-                        } else {
-                            console.warn('Fallback loaded but mapillary object still not found');
-                            window.apiLoadStatus.mapillary = true;
-                            mapillaryLoaded();
-                        }
-                    }, 500);
-                };
-                
-                fallbackScript.onerror = function() {
-                    console.error('Both primary and fallback Mapillary scripts failed');
-                    // Still mark as loaded to prevent hanging
+                if (mapillaryAPI) {
+                    console.log('Mapillary API successfully identified');
                     window.apiLoadStatus.mapillary = true;
                     mapillaryLoaded();
-                };
-                
-                document.head.appendChild(fallbackScript);
-            };
-            
-            document.head.appendChild(script);
-        }
+                } else {
+                    console.warn('Could not identify Mapillary API structure, marking as loaded anyway');
+                    window.apiLoadStatus.mapillary = true;
+                    mapillaryLoaded();
+                }
+            }, 1000);
+        };
         
-        // Enhanced mapillary loaded callback
-        function mapillaryLoaded() {
-            console.log('Mapillary loading process completed');
-            
-            // Verify the mapillary object has the required methods
-            if (window.mapillary && typeof window.mapillary.viewer === 'function') {
-                console.log('Mapillary viewer function confirmed available');
-            } else if (window.mapillary) {
-                console.warn('Mapillary object found but viewer function missing');
-            } else {
-                console.warn('Mapillary object not found, provider may have limited functionality');
-            }
-            
+        script.onerror = function(e) {
+            console.error('Error loading Mapillary script:', e);
+            // Mark as loaded to prevent hanging
             window.apiLoadStatus.mapillary = true;
-            initApp();
-        }
+            mapillaryLoaded();
+        };
         
-        // Start the enhanced loading process
-        setTimeout(loadMapillaryApi, 100);
-    </script>    
+        document.head.appendChild(script);
+    }
+    
+    // Start the loading process
+    setTimeout(loadMapillaryApi, 100);
+</script>    
         
         <!-- Your application script -->
         <script type="module" src="dist/index.js"></script>

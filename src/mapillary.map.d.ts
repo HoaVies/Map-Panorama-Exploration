@@ -6,6 +6,7 @@ declare namespace mapillary {
   interface ViewerOptions {
     container: string | HTMLElement;
     accessToken: string;
+    imageId?: string;
     component?: {
       cover?: boolean;
       direction?: boolean;
@@ -13,16 +14,11 @@ declare namespace mapillary {
       zoom?: boolean;
       attribution?: boolean;
     };
-    imageId?: string;
   }
 
   interface LatLon {
     lat: number;
     lon: number;
-  }
-
-  interface Bearing {
-    bearing: number;
   }
 
   interface ViewerState {
@@ -37,19 +33,11 @@ declare namespace mapillary {
     };
   }
 
-  interface ViewerBearingEvent {
-    bearing: number;
-  }
-
-  interface ViewerPositionEvent {
-    latLon: LatLon;
-  }
-
-  interface Viewer {
-    moveTo(imageId: string): Promise<void>;
+  class Viewer {
+    constructor(options: ViewerOptions);
     moveCloseTo(latLon: LatLon): Promise<void>;
+    moveTo(imageId: string): Promise<void>;
     setBearing(bearing: number): void;
-    setFieldOfView(fov: number): void;
     setTilt(tilt: number): void;
     getCenter(): LatLon;
     getState(): ViewerState;
@@ -57,21 +45,12 @@ declare namespace mapillary {
     off(event: string, callback: (data: any) => void): void;
     remove(): void;
   }
-
-  function viewer(options: ViewerOptions): Viewer;
-}
-
-declare module 'mapillary-js' {
-  export = mapillary;
-}
-
-declare namespace Mapillary {
-  let mapillary: typeof mapillary;
 }
 
 declare global {
   interface Window {
     mapillary: typeof mapillary;
+    Mapillary: typeof mapillary;
   }
 }
 

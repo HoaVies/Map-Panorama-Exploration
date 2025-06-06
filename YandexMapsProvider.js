@@ -111,7 +111,7 @@ export class YandexMapsProvider {
                         hintContent: 'Pegman - Drag to view street panorama'
                     }, {
                         iconLayout: 'default#image',
-                        iconImageHref: 'src/pegman.png',
+                        iconImageHref: './pegman.png',
                         iconImageSize: [32, 32],
                         iconImageOffset: [-16, -32],
                         draggable: true,

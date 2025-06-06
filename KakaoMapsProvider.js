@@ -158,7 +158,7 @@ export class KakaoMapsProvider {
         if (!this.map)
             return;
         // Create marker image for pegman
-        const markImage = new kakao.maps.MarkerImage('./src/pegman.png', new kakao.maps.Size(26, 46), {
+        const markImage = new kakao.maps.MarkerImage('./pegman.png', new kakao.maps.Size(26, 46), {
             spriteSize: new kakao.maps.Size(26, 46),
             spriteOrigin: new kakao.maps.Point(0, 0),
             offset: new kakao.maps.Point(13, 23)

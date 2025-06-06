@@ -180,7 +180,7 @@ export class MapyCzProvider {
         // Create custom pegman icon
         if (window.L) {
             this.pegmanIcon = L.icon({
-                iconUrl: 'src/pegman.png',
+                iconUrl: './pegman.png',
                 iconSize: [32, 32],
                 iconAnchor: [16, 32],
                 popupAnchor: [0, -32]

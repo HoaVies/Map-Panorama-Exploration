@@ -188,7 +188,7 @@ export class KakaoMapsProvider implements IMapProvider {
 
         // Create marker image for pegman
         const markImage = new kakao.maps.MarkerImage(
-            './src/pegman.png',
+            './pegman.png',
             new kakao.maps.Size(26, 46),
             {
                 spriteSize: new kakao.maps.Size(26, 46),

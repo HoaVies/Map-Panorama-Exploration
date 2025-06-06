@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Viewer - Multi Provider</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Default vertical layout */
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        /* Horizontal layout */
+        .container.horizontal {
+            flex-direction: row;
+        }
+        
+        .container.horizontal #map-container {
+            border-bottom: none;
+            border-right: 2px solid #ccc;
+        }
+        
+        /* Vertical layout (explicit) */
+        .container.vertical {
+            flex-direction: column;
+        }
+        
+        .container.vertical #map-container {
+            border-bottom: 2px solid #ccc;
+            border-right: none;
+        }
+        
+        #map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #street-view-container {
+            flex: 1;
+        }
+        
+        /* Trigger area for auto-hide controls */
+        .controls-trigger {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 10px;
+            z-index: 999;
+        }
+        
+        .controls-container {
+            position: absolute;
+            top: -60px; /* Start off-screen */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            transition: top 0.3s ease-in-out;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .controls-container.visible {
+            top: 0;
+        }
+        
+        .provider-selector {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .provider-selector select {
+            padding: 5px;
+            margin-left: 10px;
+        }
+        
+        .layout-toggle {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .layout-toggle button {
+            padding: 8px 16px;
+            border: none;
+            background-color: #4285f4;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .layout-toggle button:hover {
+            background-color: #3367d6;
+        }
+        
+        .layout-toggle button:active {
+            background-color: #2a56c6;
+        }
+        
+        /* Icon styling for the button */
+        .layout-toggle button::before {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            vertical-align: middle;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .layout-toggle button.horizontal::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M11 3v18h2V3h-2zm-6 0v18h2V3H5zm12 0v18h2V3h-2z'/%3E%3C/svg%3E");
+        }
+        
+        .layout-toggle button.vertical::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M3 11h18v2H3v-2zm0-6h18v2H3V5zm0 12h18v2H3v-2z'/%3E%3C/svg%3E");
+        }
+        
+        #location-info {
+            position: absolute;
+            display: none;
+            background-color: white;
+            padding: 8px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+        
+        /* Custom DOM-based pegman styles */
+        .yandex-dom-pegman {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background-image: url('https://maps.gstatic.com/pegman_v3/pegman_sprite.png');
+            background-size: 350px 32px;
+            background-position: -44px 0;
+            cursor: pointer;
+            z-index: 10000;
+            pointer-events: auto !important;
+        }
+        
+        .yandex-dom-pegman:hover {
+            background-position: -88px 0;
+        }
+        
+        .yandex-dom-pegman.dragging {
+            background-position: -132px 0;
+        }
+        
+        /* Style for when SHIFT key is active */
+        .shift-active .yandex-map-click-overlay {
+            background-color: rgba(0, 102, 255, 0.1);
+            pointer-events: auto !important;
+            cursor: crosshair;
+        }
+        
+        .yandex-map-click-overlay.active {
+            background-color: rgba(0, 102, 255, 0.1);
+            pointer-events: auto !important;
+            cursor: crosshair;
+        }
+
+        /* Loading indicator */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+
+    <style>
+        /* Add to your existing styles */
+        
+        /* Enhanced coverage and street view styling */
+        .mapillary-coverage-overlay {
+            pointer-events: auto !important;
+            cursor: crosshair;
+        }
+        
+        .mapillary-coverage-overlay:hover {
+            fill-opacity: 0.2 !important;
+        }
+        
+        /* Street view container enhancements */
+        #street-view-container {
+            position: relative;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        
+        /* Custom Mapillary viewer styling */
+        .mapillary-viewer {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        /* Coverage info box */
+        .coverage-info {
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .coverage-info div {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Loading states */
+        .loading-street-view {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #f8f8f8;
+            color: #666;
+            font-family: Arial, sans-serif;
+        }
+        
+        .loading-street-view::before {
+            content: '🔄';
+            margin-right: 8px;
+            animation: spin 2s linear infinite;
+        }
+        
+        /* Error states */
+        .error-street-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #f8f8f8;
+            color: #999;
+            text-align: center;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        .error-street-view::before {
+            content: '⚠️';
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        /* Enhanced map controls */
+        .leaflet-control-container .leaflet-control {
+            margin: 10px;
+        }
+        
+        .leaflet-bar {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .leaflet-bar button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        /* Pegman dragging states */
+        .mapillary-pegman {
+            transition: all 0.2s ease;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .mapillary-pegman:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.4));
+        }
+        
+        /* Responsive design improvements */
+        @media (max-width: 768px) {
+            .leaflet-control {
+                margin: 5px !important;
+            }
+            
+            .leaflet-control button,
+            .leaflet-control select {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            
+            .coverage-info div {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+        }
+    </style>
+    <!-- Leaflet CSS for Mapy.cz -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- Load Leaflet core JS before any plugins -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Load VectorGrid plugin after Leaflet, before app code -->
+    <script src="https://unpkg.com/leaflet.vectorgrid@1.3.0/dist/Leaflet.VectorGrid.bundled.js"></script>
+    <!-- (If you use other Leaflet plugins, load them here) -->
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div style="margin-left: 15px;">Loading map APIs...</div>
+    </div>
+
+    <div class="controls-trigger"></div>
+    <div class="controls-container">
+        <div class="provider-selector">
+            <label>Map Provider:</label>
+            <select id="provider-select">
+                <option value="google">Google Maps</option>
+                <option value="kakao">Kakao Maps</option>
+                <option value="yandex">Yandex Maps</option>
+                <option value="mapycz">Mapy.cz</option>
+                <option value="mapillary">Mapillary</option>
+            </select>
+        </div>
+        <div class="layout-toggle">
+            <button id="layout-toggle-btn" class="vertical" title="Toggle layout">Horizontal Layout</button>
+        </div>
+    </div>
+
+    <div class="container vertical" id="main-container">
+        <div id="map-container"></div>
+        <div id="street-view-container"></div>
+    </div>
+    
+    <div id="location-info"></div>
+
+    <!-- API Loading and Tracking Script -->
+    <script>
+        // Create a global tracking object for API loading status
+        window.apiLoadStatus = {
+            google: false,
+            kakao: false,
+            yandex: false,
+            mapycz: false,
+            mapillary: false
+        };
+        
+        function initApp() {
+            // Check if all required APIs are loaded
+            if (window.apiLoadStatus.google && 
+                window.apiLoadStatus.kakao && 
+                window.apiLoadStatus.yandex && 
+                window.apiLoadStatus.mapycz &&
+                window.apiLoadStatus.mapillary) {
+                
+                console.log("All map APIs loaded successfully");
+                
+                // Hide loading overlay
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                }
+                
+                // Trigger the module loader
+                const event = new Event('apis_loaded');
+                document.dispatchEvent(event);
+            } else {
+                console.log("Waiting for APIs:", window.apiLoadStatus);
+            }
+        }
+        
+        // Google Maps callback
+        function googleMapsLoaded() {
+            console.log("Google Maps API loaded");
+            window.apiLoadStatus.google = true;
+            initApp();
+        }
+        
+        // Kakao Maps callback
+        function kakaoMapsLoaded() {
+            console.log("Kakao Maps API loaded");
+            window.apiLoadStatus.kakao = true;
+            initApp();
+        }
+        
+        // Yandex Maps callback
+        function yandexMapsLoaded() {
+            console.log("Yandex Maps API loaded");
+            window.apiLoadStatus.yandex = true;
+            initApp();
+        }
+        
+        // Mapy.cz callback
+        function mapyczLoaded() {
+            console.log("Mapy.cz API loaded");
+            window.apiLoadStatus.mapycz = true;
+            initApp();
+        }
+
+        // Add Mapillary callback
+        function mapillaryLoaded() {
+            console.log("Mapillary API loaded");
+            window.apiLoadStatus.mapillary = true;
+            initApp();
+        }
+
+        // Set a timeout to catch any APIs that fail to load
+        setTimeout(() => {
+            // Check for any APIs that haven't loaded
+            const unloadedApis = [];
+            for (const [api, loaded] of Object.entries(window.apiLoadStatus)) {
+                if (!loaded) unloadedApis.push(api);
+            }
+            
+            if (unloadedApis.length > 0) {
+                console.warn(`Some APIs failed to load: ${unloadedApis.join(', ')}`);
+                console.warn("Attempting to continue anyway...");
+                
+                // Force all to true and try to continue
+                for (const api of unloadedApis) {
+                    window.apiLoadStatus[api] = true;
+                }
+                
+                // Try to initialize
+                initApp();
+            }
+        }, 10000); // 10 second timeout
+    </script>
+
+    <!-- Google Maps API with callback -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBOlWreS7Z60pod_RUaqhj4pDax4V7kug0&callback=googleMapsLoaded" async defer></script>
+    
+    <!-- Kakao Maps API with explicit protocol -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=bb6dae98d7940acbb68719b7d0a00d14&autoload=false"></script>
+    <script>
+        // Loading sequence for Kakao Maps
+        function loadKakaoMaps() {
+            // Check if script has loaded and created global kakao object
+            if (typeof kakao === 'undefined') {
+                console.log('Waiting for Kakao Maps script to load...');
+                setTimeout(loadKakaoMaps, 200);
+                return;
+            }
+            
+            // Now initialize the API
+            try {
+                console.log('Kakao object found, initializing maps module...');
+                kakao.maps.load(function() {
+                    console.log('Kakao Maps API fully loaded and ready');
+                    window.apiLoadStatus.kakao = true;
+                    initApp();
+                });
+            } catch (e) {
+                console.error('Error initializing Kakao Maps:', e);
+                // Set as loaded anyway after multiple retries
+                let retryCount = 0;
+                const maxRetries = 3;
+                
+                function retryKakaoLoad() {
+                    if (retryCount >= maxRetries) {
+                        console.warn('Max retries reached for Kakao Maps, marking as loaded anyway');
+                        window.apiLoadStatus.kakao = true;
+                        initApp();
+                        return;
+                    }
+                    
+                    retryCount++;
+                    console.log(`Retry ${retryCount}/${maxRetries} loading Kakao Maps...`);
+                    setTimeout(() => {
+                        try {
+                            kakao.maps.load(function() {
+                                console.log('Kakao Maps API loaded on retry');
+                                window.apiLoadStatus.kakao = true;
+                                initApp();
+                            });
+                        } catch (e) {
+                            console.error('Error on retry:', e);
+                            retryKakaoLoad();
+                        }
+                    }, 500);
+                }
+                
+                retryKakaoLoad();
+            }
+        }
+        
+        // Start loading process
+        setTimeout(loadKakaoMaps, 500);
+    </script>
+        
+        <!-- Yandex Maps API with callback -->
+        <script src="https://api-maps.yandex.ru/2.1/?apikey=d14067b3-f5ac-4cfb-b7f9-de9ba7bda726&lang=en_US&onload=yandexMapsLoaded" type="text/javascript"></script>
+        
+        <!-- Leaflet for Mapy.cz -->
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" onload="mapyczLoaded()"></script>
+        
+        <script>
+            window.mapycz_api_key = 'PpgOEdY7F0t99ALvSN08G_iDtEivZTdcamXY67Jc6-A';
+        </script>
+        <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
+    
+    <!-- Move this higher up in your HTML file, after the layout toggle script but before your module script -->
+    <!-- Mapillary API -->
+    <script>
+    // Load Mapillary API explicitly
+    function loadMapillaryApi() {
+        console.log('Starting Mapillary API load');
+
+        // First add the CSS
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css';
+        document.head.appendChild(link);
+        
+        // Load the main Mapillary script
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js';
+        
+        script.onload = function() {
+            console.log('Mapillary script loaded, verifying API structure...');
+            
+            // Wait for the library to fully initialize
+            setTimeout(() => {
+                // Check different possible API structures
+                let mapillaryAPI = null;
+                
+                if (window.mapillary && window.mapillary.Viewer) {
+                    console.log('Found mapillary.Viewer constructor');
+                    mapillaryAPI = window.mapillary;
+                } else if (window.Mapillary && window.Mapillary.Viewer) {
+                    console.log('Found Mapillary.Viewer constructor');
+                    mapillaryAPI = window.Mapillary;
+                    // Create alias for consistency
+                    window.mapillary = window.Mapillary;
+                } else if (window.mapillary && typeof window.mapillary === 'function') {
+                    console.log('Found mapillary as function');
+                    // Some versions expose it as a function
+                    mapillaryAPI = { Viewer: window.mapillary };
+                    window.mapillary = mapillaryAPI;
+                } else {
+                    console.error('Mapillary API structure not recognized');
+                    console.log('Available on window:', Object.keys(window).filter(k => k.toLowerCase().includes('mapillary')));
+                }
+                
+                if (mapillaryAPI) {
+                    console.log('Mapillary API successfully identified');
+                    window.apiLoadStatus.mapillary = true;
+                    mapillaryLoaded();
+                } else {
+                    console.warn('Could not identify Mapillary API structure, marking as loaded anyway');
+                    window.apiLoadStatus.mapillary = true;
+                    mapillaryLoaded();
+                }
+            }, 1000);
+        };
+        
+        script.onerror = function(e) {
+            console.error('Error loading Mapillary script:', e);
+            // Mark as loaded to prevent hanging
+            window.apiLoadStatus.mapillary = true;
+            mapillaryLoaded();
+        };
+        
+        document.head.appendChild(script);
+    }
+    
+    // Start the loading process
+    setTimeout(loadMapillaryApi, 100);
+</script>    
+        
+        <script type="module" src="./dist/index.js"></script>
+        
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const streetViewContainer = document.getElementById('street-view-container');
+            const mainContainer = document.getElementById('main-container');
+            const layoutToggleBtn = document.getElementById('layout-toggle-btn');
+            const controlsContainer = document.querySelector('.controls-container');
+            const controlsTrigger = document.querySelector('.controls-trigger');
+            
+            // Auto-hide controls functionality
+            let controlsTimeout;
+            
+            function showControls() {
+                controlsContainer.classList.add('visible');
+                clearTimeout(controlsTimeout);
+            }
+            
+            function hideControls() {
+                controlsTimeout = setTimeout(() => {
+                    // Only hide if mouse is not over controls or trigger
+                    if (!controlsHovered && !triggerHovered) {
+                        controlsContainer.classList.remove('visible');
+                    }
+                }, 2000); // Hide after 2 seconds
+            }
+            
+            // Track hover states
+            let controlsHovered = false;
+            let triggerHovered = false;
+            
+            // Trigger area events
+            controlsTrigger.addEventListener('mouseenter', () => {
+                triggerHovered = true;
+                showControls();
+            });
+            
+            controlsTrigger.addEventListener('mouseleave', () => {
+                triggerHovered = false;
+                hideControls();
+            });
+            
+            // Controls container events
+            controlsContainer.addEventListener('mouseenter', () => {
+                controlsHovered = true;
+                showControls();
+            });
+            
+            controlsContainer.addEventListener('mouseleave', () => {
+                controlsHovered = false;
+                hideControls();
+            });
+            
+            // Show controls initially, then hide after delay
+            showControls();
+            hideControls();
+            
+            // Layout toggle functionality
+            let isHorizontal = false;
+            
+            layoutToggleBtn.addEventListener('click', function() {
+                isHorizontal = !isHorizontal;
+                
+                if (isHorizontal) {
+                    mainContainer.classList.remove('vertical');
+                    mainContainer.classList.add('horizontal');
+                    layoutToggleBtn.classList.remove('vertical');
+                    layoutToggleBtn.classList.add('horizontal');
+                    layoutToggleBtn.textContent = 'Vertical Layout';
+                } else {
+                    mainContainer.classList.remove('horizontal');
+                    mainContainer.classList.add('vertical');
+                    layoutToggleBtn.classList.remove('horizontal');
+                    layoutToggleBtn.classList.add('vertical');
+                    layoutToggleBtn.textContent = 'Horizontal Layout';
+                }
+                
+                // Trigger resize events for all map providers
+                window.dispatchEvent(new Event('resize'));
+                
+                // Additional resize triggers for specific providers
+                if (window.activeProvider) {
+                    switch (window.activeProvider) {
+                        case 'google':
+                            if (window.googleMap) {
+                                google.maps.event.trigger(window.googleMap, 'resize');
+                            }
+                            break;
+                        case 'kakao':
+                            if (window.kakaoMap) {
+                                window.kakaoMap.relayout();
+                            }
+                            break;
+                        case 'yandex':
+                            if (window.yandexMap) {
+                                window.yandexMap.container.fitToViewport();
+                            }
+                            break;
+                        case 'mapycz':
+                            if (window.mapyczMap) {
+                                window.mapyczMap.invalidateSize();
+                            }
+                            break;
+                        case 'mapillary':
+                            if (window.mapillaryMap) {
+                                // Trigger appropriate resize event if needed
+                                window.dispatchEvent(new Event('resize'));
+                            }
+                            break;
+                    }
+                }
+            });
+            
+            if (streetViewContainer) {
+                streetViewContainer.addEventListener('wheel', function(e) {
+                    console.log('Wheel event detected on street-view-container');
+                    
+                    streetViewContainer.classList.add('wheel-active');
+                    setTimeout(() => {
+                        streetViewContainer.classList.remove('wheel-active');
+                    }, 300);
+                });
+                
+                streetViewContainer.classList.add('panorama-container');
+                console.log('Street view container wheel event monitor initialized');
+            }
+        });
+    </script>
+</body>
+</html>

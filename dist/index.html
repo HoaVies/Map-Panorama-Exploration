@@ -4,328 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Map Viewer - Multi Provider</title>
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        
-        /* Default vertical layout */
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-        
-        /* Horizontal layout */
-        .container.horizontal {
-            flex-direction: row;
-        }
-        
-        .container.horizontal #map-container {
-            border-bottom: none;
-            border-right: 2px solid #ccc;
-        }
-        
-        /* Vertical layout (explicit) */
-        .container.vertical {
-            flex-direction: column;
-        }
-        
-        .container.vertical #map-container {
-            border-bottom: 2px solid #ccc;
-            border-right: none;
-        }
-        
-        #map-container {
-            flex: 1;
-            position: relative;
-        }
-        
-        #street-view-container {
-            flex: 1;
-        }
-        
-        /* Trigger area for auto-hide controls */
-        .controls-trigger {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 10px;
-            z-index: 999;
-        }
-        
-        .controls-container {
-            position: absolute;
-            top: -60px; /* Start off-screen */
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            transition: top 0.3s ease-in-out;
-            padding: 10px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border-radius: 0 0 10px 10px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .controls-container.visible {
-            top: 0;
-        }
-        
-        .provider-selector {
-            background-color: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .provider-selector select {
-            padding: 5px;
-            margin-left: 10px;
-        }
-        
-        .layout-toggle {
-            background-color: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .layout-toggle button {
-            padding: 8px 16px;
-            border: none;
-            background-color: #4285f4;
-            color: white;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        
-        .layout-toggle button:hover {
-            background-color: #3367d6;
-        }
-        
-        .layout-toggle button:active {
-            background-color: #2a56c6;
-        }
-        
-        /* Icon styling for the button */
-        .layout-toggle button::before {
-            content: '';
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            margin-right: 8px;
-            vertical-align: middle;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-        }
-        
-        .layout-toggle button.horizontal::before {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M11 3v18h2V3h-2zm-6 0v18h2V3H5zm12 0v18h2V3h-2z'/%3E%3C/svg%3E");
-        }
-        
-        .layout-toggle button.vertical::before {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M3 11h18v2H3v-2zm0-6h18v2H3V5zm0 12h18v2H3v-2z'/%3E%3C/svg%3E");
-        }
-        
-        #location-info {
-            position: absolute;
-            display: none;
-            background-color: white;
-            padding: 8px;
-            border-radius: 4px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-        }
-        
-        /* Custom DOM-based pegman styles */
-        .yandex-dom-pegman {
-            position: absolute;
-            width: 32px;
-            height: 32px;
-            background-image: url('https://maps.gstatic.com/pegman_v3/pegman_sprite.png');
-            background-size: 350px 32px;
-            background-position: -44px 0;
-            cursor: pointer;
-            z-index: 10000;
-            pointer-events: auto !important;
-        }
-        
-        .yandex-dom-pegman:hover {
-            background-position: -88px 0;
-        }
-        
-        .yandex-dom-pegman.dragging {
-            background-position: -132px 0;
-        }
-        
-        /* Style for when SHIFT key is active */
-        .shift-active .yandex-map-click-overlay {
-            background-color: rgba(0, 102, 255, 0.1);
-            pointer-events: auto !important;
-            cursor: crosshair;
-        }
-        
-        .yandex-map-click-overlay.active {
-            background-color: rgba(0, 102, 255, 0.1);
-            pointer-events: auto !important;
-            cursor: crosshair;
-        }
-
-        /* Loading indicator */
-        #loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-
-    <style>
-        /* Add to your existing styles */
-        
-        /* Enhanced coverage and street view styling */
-        .mapillary-coverage-overlay {
-            pointer-events: auto !important;
-            cursor: crosshair;
-        }
-        
-        .mapillary-coverage-overlay:hover {
-            fill-opacity: 0.2 !important;
-        }
-        
-        /* Street view container enhancements */
-        #street-view-container {
-            position: relative;
-            background: #f5f5f5;
-            border: 1px solid #ddd;
-        }
-        
-        /* Custom Mapillary viewer styling */
-        .mapillary-viewer {
-            width: 100% !important;
-            height: 100% !important;
-        }
-        
-        /* Coverage info box */
-        .coverage-info {
-            z-index: 1000;
-            pointer-events: none;
-        }
-        
-        .coverage-info div {
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            font-family: Arial, sans-serif;
-        }
-        
-        /* Loading states */
-        .loading-street-view {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            background: #f8f8f8;
-            color: #666;
-            font-family: Arial, sans-serif;
-        }
-        
-        .loading-street-view::before {
-            content: '🔄';
-            margin-right: 8px;
-            animation: spin 2s linear infinite;
-        }
-        
-        /* Error states */
-        .error-street-view {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            background: #f8f8f8;
-            color: #999;
-            text-align: center;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-        }
-        
-        .error-street-view::before {
-            content: '⚠️';
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-        
-        /* Enhanced map controls */
-        .leaflet-control-container .leaflet-control {
-            margin: 10px;
-        }
-        
-        .leaflet-bar {
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        
-        .leaflet-bar button:hover {
-            background-color: #f0f0f0;
-        }
-        
-        /* Pegman dragging states */
-        .mapillary-pegman {
-            transition: all 0.2s ease;
-            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
-        }
-        
-        .mapillary-pegman:hover {
-            transform: scale(1.1);
-            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.4));
-        }
-        
-        /* Responsive design improvements */
-        @media (max-width: 768px) {
-            .leaflet-control {
-                margin: 5px !important;
-            }
-            
-            .leaflet-control button,
-            .leaflet-control select {
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            
-            .coverage-info div {
-                font-size: 11px;
-                padding: 6px 10px;
-            }
-        }
-    </style>
+    
+    <!-- External CSS -->
+    <link rel="stylesheet" href="styles/main.css">
+    
     <!-- Leaflet CSS for Mapy.cz -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <!-- Load Leaflet core JS before any plugins -->
@@ -530,7 +212,6 @@
         </script>
         <script src="https://api.mapy.cz/js/panorama/v1/panorama.js"></script>
     
-    <!-- Move this higher up in your HTML file, after the layout toggle script but before your module script -->
     <!-- Mapillary API -->
     <script>
     // Load Mapillary API explicitly
@@ -620,7 +301,7 @@
                     if (!controlsHovered && !triggerHovered) {
                         controlsContainer.classList.remove('visible');
                     }
-                }, 2000); // Hide after 2 seconds
+                }, 2000);
             }
             
             // Track hover states
@@ -722,8 +403,70 @@
                 streetViewContainer.classList.add('panorama-container');
                 console.log('Street view container wheel event monitor initialized');
             }
+
+            // Initialize welcome instructions when DOM is fully loaded
+            setTimeout(() => {
+                document.getElementById('welcome-notification').style.display = 'flex';
+            }, 1000);
+        });
+    </script>
+
+    <script>
+        // Global function to hide welcome instructions
+        function hideWelcomeInstructions() {
+            document.getElementById('welcome-notification').style.display = 'none';
+        }
+        
+        // F1 key to show instructions again
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F1') {
+                e.preventDefault();
+                document.getElementById('welcome-notification').style.display = 'flex';
+            }
+        });
+        
+        // Check URL parameters for help flag
+        window.addEventListener('load', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('help') === 'true') {
+                document.getElementById('welcome-notification').style.display = 'flex';
+            }
         });
     </script>
     <script type="module" src="./index.js"></script>
+
+    <div id="welcome-notification" style="display: none;">
+        <div class="welcome-content">
+            <!-- Add X close button -->
+            <div class="welcome-close-btn" onclick="hideWelcomeInstructions()">×</div>
+            
+            <h2>Welcome to Map Panorama Explorer</h2>
+            <p>This application allows you to explore multiple map providers and their street view features.</p>
+            
+            <div class="instructions-section">
+                <h3>Basic Navigation</h3>
+                <ul>
+                    <li><strong>Change Map Provider:</strong> Use the dropdown menu in the top controls</li>
+                    <li><strong>Toggle Layout:</strong> Switch between horizontal and vertical layouts with the button</li>
+                    <li><strong>Pan/Zoom:</strong> Use standard map controls or mouse/touch gestures</li>
+                    <li><strong>Street View:</strong> Click a location on the map or drag the pegman icon</li>
+                </ul>
+                
+                <h3>Advanced Features</h3>
+                <ul>
+                    <li><strong>Coverage Map:</strong> Shows areas where street view is available (supported by Google, Kakao, and Yandex)</li>
+                    <li><strong>Synchronized Navigation:</strong> Moving in street view updates the map marker position</li>
+                    <li><strong>Position Preservation:</strong> Your location and view angle are maintained when switching providers</li>
+                </ul>
+                
+                <h3>Provider-Specific Tips</h3>
+                <p>Each map provider has unique controls but our interface attempts to normalize the experience. Some features may work differently across providers.</p>
+            </div>
+            
+            <div class="reshow-info">
+                <small>You can show these instructions again by pressing <kbd>F1</kbd> </small>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

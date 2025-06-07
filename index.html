@@ -278,7 +278,10 @@
     
     // Start the loading process
     setTimeout(loadMapillaryApi, 100);
-</script>         
+</script>    
+        
+        <script type="module" src="./dist/index.js"></script>
+        
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const streetViewContainer = document.getElementById('street-view-container');
@@ -301,7 +304,7 @@
                     if (!controlsHovered && !triggerHovered) {
                         controlsContainer.classList.remove('visible');
                     }
-                }, 2000);
+                }, 2000); // Hide after 2 seconds
             }
             
             // Track hover states
@@ -433,7 +436,6 @@
             }
         });
     </script>
-    <script type="module" src="./index.js"></script>
 
     <div id="welcome-notification" style="display: none;">
         <div class="welcome-content">

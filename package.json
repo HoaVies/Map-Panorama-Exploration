@@ -7,8 +7,9 @@
     "scripts": {
         "compile": "tsc",
         "copy-html": "cp index.html dist/",
+        "copy-css": "mkdir -p dist/styles && cp -r styles/* dist/styles/",
         "copy-assets": "mkdir -p dist && cp src/pegman.png dist/ 2>/dev/null || true",
-        "build": "npm run compile && npm run copy-html && npm run copy-assets",
+        "build": "npm run compile && npm run copy-html && npm run copy-css && npm run copy-assets",
         "start": "http-server . -p 8080",
         "predeploy": "npm run build",
         "deploy": "gh-pages -d dist"

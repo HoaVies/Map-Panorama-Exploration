@@ -6,7 +6,7 @@
     <title>Map Viewer - Multi Provider</title>
     
     <!-- External CSS -->
-    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="./main.css">
     
     <!-- Leaflet CSS for Mapy.cz -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -278,10 +278,7 @@
     
     // Start the loading process
     setTimeout(loadMapillaryApi, 100);
-</script>    
-        
-        <script type="module" src="./dist/index.js"></script>
-        
+</script>         
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const streetViewContainer = document.getElementById('street-view-container');
@@ -304,7 +301,7 @@
                     if (!controlsHovered && !triggerHovered) {
                         controlsContainer.classList.remove('visible');
                     }
-                }, 2000); // Hide after 2 seconds
+                }, 2000);
             }
             
             // Track hover states
@@ -436,6 +433,7 @@
             }
         });
     </script>
+    <script type="module" src="./index.js"></script>
 
     <div id="welcome-notification" style="display: none;">
         <div class="welcome-content">

@@ -8,20 +8,16 @@ This project was developed as part of an 8-week internship period under the supe
 
 ### Developer Contributions
 
-**Contribution Rules:** Base map with marker: 0.5 points, Synchronization between pegman and panorama: 0.25 points, Coverage Map: 0.25 points
-
 - **Hoang Viet**: 
-  - Google implementation (reference provider, 0.5 points)
-  - Kakao Maps full implementation (1 point)
-  - Yandex Maps implementation (pegman synchronization and coverage map, 0.5 points)
-  - MapyCZ implementation (base functionality without coverage map, 0.75 points)
-  - Provider-neutral architecture design and Cross-provider position and POV synchronization system (1 point)
-  - Total: 3.75 points
+  - Google implementation 
+  - Kakao Maps full implementation 
+  - Yandex Maps implementation (pegman synchronization and coverage map)
+  - MapyCZ implementation (base functionality without coverage map)
+  - Provider-neutral architecture design and Cross-provider position and POV synchronization system)
 
 - **Tran Quang Ha**:
   - Yandex Maps implementation (base map with marker functionality, 0.5 points)
   - Mapillary implementation (base map, 0.5 points)
-  - Total: 1 point
 
 ## 🌟 Features
 
@@ -212,4 +208,6 @@ The project implements a sophisticated cross-provider synchronization system:
 - Yandex Maps API
 - Mapy.cz API
 - Mapillary
-- https://github.com/sk-zk/streetlevel
+- The idea of choosing map provider is from https://github.com/sk-zk/streetlevel
+
+## The api of these provider has been configured and will automatically blocked when exceed the limit, you can add your own api from their websites.

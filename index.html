@@ -406,22 +406,34 @@
 
             // Initialize welcome instructions when DOM is fully loaded
             setTimeout(() => {
+                welcomeVisible = true;
                 document.getElementById('welcome-notification').style.display = 'flex';
             }, 1000);
         });
     </script>
 
     <script>
+        // Global state for welcome instructions visibility
+        let welcomeVisible = false;
+        
+        // Global function to toggle welcome instructions
+        function toggleWelcomeInstructions() {
+            const welcomeElement = document.getElementById('welcome-notification');
+            welcomeVisible = !welcomeVisible;
+            welcomeElement.style.display = welcomeVisible ? 'flex' : 'none';
+        }
+        
         // Global function to hide welcome instructions
         function hideWelcomeInstructions() {
+            welcomeVisible = false;
             document.getElementById('welcome-notification').style.display = 'none';
         }
         
-        // F1 key to show instructions again
+        // F1 key to toggle instructions on/off
         document.addEventListener('keydown', function(e) {
             if (e.key === 'F1') {
                 e.preventDefault();
-                document.getElementById('welcome-notification').style.display = 'flex';
+                toggleWelcomeInstructions();
             }
         });
         
@@ -429,6 +441,7 @@
         window.addEventListener('load', function() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('help') === 'true') {
+                welcomeVisible = true;
                 document.getElementById('welcome-notification').style.display = 'flex';
             }
         });
@@ -437,34 +450,58 @@
 
     <div id="welcome-notification" style="display: none;">
         <div class="welcome-content">
-            <!-- Add X close button -->
             <div class="welcome-close-btn" onclick="hideWelcomeInstructions()">×</div>
             
-            <h2>Welcome to Map Panorama Explorer</h2>
-            <p>This application allows you to explore multiple map providers and their street view features.</p>
+            <h2>🗺️ Welcome to Map Panorama Explorer</h2>
+            <p>This application allows you to explore multiple map providers and their street view features across different regions of the world.</p>
             
             <div class="instructions-section">
-                <h3>Basic Navigation</h3>
+                <h3>🎯 Regional Map Providers</h3>
+                <div class="provider-details">
+                    <p><strong>🇺🇸 Google Maps:</strong> Global coverage with excellent street view in North America, Europe, Australia, and major cities worldwide. Best for international exploration.</p>
+                    <p><strong>🇰🇷 Kakao Maps:</strong> Specialized for South Korea with detailed local data, Korean business listings, and comprehensive street view coverage throughout Korea.</p>
+                    <p><strong>🇷🇺 Yandex Maps:</strong> Optimized for Russia, CIS countries, and Eastern Europe. Provides detailed mapping and street view for Russian-speaking regions.</p>
+                    <p><strong>🇨🇿 Mapy.cz:</strong> Focused on Czech Republic and Central Europe. Offers detailed topographic data and local points of interest for Czech regions.</p>
+                    <p><strong>🌍 Mapillary:</strong> Community-driven street-level imagery covering global locations with crowd-sourced panoramic photos.</p>
+                </div>
+                
+                <h3>🚀 Getting Started</h3>
                 <ul>
-                    <li><strong>Change Map Provider:</strong> Use the dropdown menu in the top controls</li>
-                    <li><strong>Toggle Layout:</strong> Switch between horizontal and vertical layouts with the button</li>
-                    <li><strong>Pan/Zoom:</strong> Use standard map controls or mouse/touch gestures</li>
-                    <li><strong>Street View:</strong> Click a location on the map or drag the pegman icon</li>
+                    <li><strong>Select Provider:</strong> Use the dropdown menu to choose the map provider best suited for your target region</li>
+                    <li><strong>Navigate Maps:</strong> Click and drag to pan, scroll to zoom, or use the zoom controls</li>
+                    <li><strong>Enter Street View:</strong> Click any location on the map or drag the pegman/street view icon to a blue-highlighted area</li>
+                    <li><strong>Switch Layouts:</strong> Toggle between horizontal and vertical split-screen layouts using the layout button</li>
                 </ul>
                 
-                <h3>Advanced Features</h3>
+                <h3>✨ Advanced Features</h3>
                 <ul>
-                    <li><strong>Coverage Map:</strong> Shows areas where street view is available (supported by Google, Kakao, and Yandex)</li>
-                    <li><strong>Synchronized Navigation:</strong> Moving in street view updates the map marker position</li>
-                    <li><strong>Position Preservation:</strong> Your location and view angle are maintained when switching providers</li>
+                    <li><strong>Coverage Visualization:</strong> Blue overlays show where street view is available (Google, Kakao, Yandex)</li>
+                    <li><strong>Synchronized Navigation:</strong> Moving in street view automatically updates your position on the map</li>
+                    <li><strong>Cross-Provider Positioning:</strong> Your location and view angle are preserved when switching between providers</li>
+                    <li><strong>Auto-Hide Controls:</strong> Interface controls automatically hide for immersive viewing - hover near the top to reveal them</li>
+                    <li><strong>Responsive Design:</strong> Works seamlessly on desktop, tablet, and mobile devices</li>
                 </ul>
                 
-                <h3>Provider-Specific Tips</h3>
-                <p>Each map provider has unique controls but our interface attempts to normalize the experience. Some features may work differently across providers.</p>
+                <h3>🔑 API Configuration</h3>
+                <div class="api-info">
+                    <p><strong>Pre-configured APIs:</strong> All map provider APIs have been pre-configured with developer keys for immediate use.</p>
+                    <p><strong>Usage Limits:</strong> Each API has daily usage quotas. When limits are exceeded, the service will automatically block requests to prevent billing overages.</p>
+                    <p><strong>Custom APIs:</strong> Advanced users can replace the API keys in the source code with their own credentials for unlimited usage or custom configurations.</p>
+                    <p><strong>Rate Limiting:</strong> Built-in request throttling ensures optimal performance and prevents API abuse.</p>
+                </div>
+                
+                <h3>💡 Provider-Specific Tips</h3>
+                <ul>
+                    <li><strong>Google:</strong> Drag the pegman icon to see street view coverage before clicking</li>
+                    <li><strong>Kakao:</strong> Best performance with Korean addresses and landmark searches</li>
+                    <li><strong>Yandex:</strong> Excellent for Cyrillic address searches and Russian POIs</li>
+                    <li><strong>Mapy.cz:</strong> Features detailed hiking trails and outdoor recreation data</li>
+                    <li><strong>Mapillary:</strong> Community photos may have varying quality and coverage density</li>
+                </ul>
             </div>
             
             <div class="reshow-info">
-                <small>You can show these instructions again by pressing <kbd>F1</kbd> </small>
+                <small>💡 Press <kbd>F1</kbd> to toggle these instructions on/off at any time</small>
             </div>
         </div>
     </div>
